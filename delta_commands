@@ -1,0 +1,13 @@
+cd ~/ros2_ws
+colcon build --packages-select delta_interfaces mission_control object_identifier delta_greeter delta_explorer
+// restart terminal after building and source workspace
+ros2 run mission_control mission_control
+ros2 run object_identifier object_identifier
+ros2 run delta_greeter delta_greeter
+ros2 run delta_explorer delta_explorer
+
+// download and build dis_tutorial3 from https://github.com/vicoslab/dis_tutorial3
+// gazebo and ris
+ros2 launch dis_tutorial3 sim_turtlebot_nav.launch.py
+//face detection
+ros2 run dis_tutorial3 detect_people.py
