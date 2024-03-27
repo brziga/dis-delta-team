@@ -294,7 +294,11 @@ class RobotCommander(Node):
         self.get_logger().debug(msg)
         return
 
-def createNewRc():
+def moveToPosition(x,y,rot):
+    #testing
+    #time.sleep(3)
+    #return
+             
     rc = RobotCommander()
 
     # Wait until Nav2 and Localizer are available
@@ -307,14 +311,6 @@ def createNewRc():
     # If it is docked, undock it first
     if rc.is_docked:
         rc.undock()
-    return rc
-    
-def moveToPosition(rc,x,y,rot):
-    #testing
-    #time.sleep(3)
-    #return
-             
-    
     
     # Finally send it a goal to reach
     goal_pose = PoseStamped()
@@ -333,12 +329,7 @@ def moveToPosition(rc,x,y,rot):
 
     #rc.spin(-0.57)
 
-def cancelMoveToPosition(rc):
-    rc.cancelTask()
-    
-def destroyRc(rc):
     rc.destroyNode()
-    
 #------------------------------------------------------------------------------------------
 
 
@@ -356,12 +347,10 @@ class Explorer(Node):
         self.id_of_current_job = ""
         self.currently_exploring = False
         
-        self.rc = None
-        
         self.keepExploring = False
         self.stoppedExploring = True
         self.explorationPoints = [[1.0,1.0,0.0], [1.0,2.0,0.0], [2.0,1.0,0.0]]
-        self.explorationPointIndex = 0
+        self.explorationPointIndex = -1
         
         # publishing the jobs status
         self.publisher_ = self.create_publisher(JobStatus, 'job_status', 1)
@@ -428,11 +417,6 @@ class Explorer(Node):
         
         # TODO: stop exploring!
         self.keepExploring = False
-        try:
-            cancelMoveToPosition(self.rc)
-        except:
-            self.get_logger().info('exception while canceling movement')
-        
         while not self.stoppedExploring:
             self.get_logger().info('waiting for exploration to stop')
             time.sleep(0.5)
@@ -444,29 +428,21 @@ class Explorer(Node):
         self.publish_status()
         
     def exploreNextPoint(self):
+        self.get_logger().info('exploring next point')
         if self.keepExploring:
-            self.get_logger().info('exploring next point')
-            rc = createNewRc()
-            # check again before starting movement if robot should still explore
-            if self.keepExploring:
-                nextPoint = self.explorationPoints[self.explorationPointIndex]
-                self.get_logger().info('moving to point (x: %f  y: %f  rot: %f)' % (nextPoint[0], nextPoint[1], nextPoint[2]))
-                moveToPosition(rc, nextPoint[0],nextPoint[1],nextPoint[2])
-                if rc.getResult() == TaskResult.SUCCEEDED:
-                    increment_exploration_point_index()
-            destroyRc(rc)
-            self.rc = None
-            
+            # move to next position
+            if self.explorationPointIndex + 1 < len(self.explorationPoints):
+                self.explorationPointIndex = self.explorationPointIndex + 1
+            else:
+                self.explorationPointIndex = 0
+            nextPoint = self.explorationPoints[self.explorationPointIndex]
+            self.get_logger().info('moving to point (x: %f  y: %f  rot: %f)' % (nextPoint[0], nextPoint[1], nextPoint[2]))
+            moveToPosition(nextPoint[0],nextPoint[1],nextPoint[2])
             thread = Thread(target = self.exploreNextPoint)
             thread.start()
         else:
             self.stoppedExploring = True
             return
-    def increment_exploration_point_index(self):
-        if self.explorationPointIndex + 1 < len(self.explorationPoints):
-            self.explorationPointIndex = self.explorationPointIndex + 1
-        else:
-            self.explorationPointIndex = 0
 
 
 def main(args=None):
