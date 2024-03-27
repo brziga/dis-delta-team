@@ -9,5 +9,5 @@ ros2 run delta_explorer delta_explorer
 // download and build dis_tutorial3 from https://github.com/vicoslab/dis_tutorial3
 // gazebo and ris
 ros2 launch dis_tutorial3 sim_turtlebot_nav.launch.py
-//face detection
+// face detection
 ros2 run dis_tutorial3 detect_people.py
