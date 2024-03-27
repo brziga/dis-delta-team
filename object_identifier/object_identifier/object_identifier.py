@@ -45,6 +45,9 @@ class LevelObjectIdentifier(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         
+        #testing
+        #self.insert_level_object(.1, .2, .3, 0.0,"person_1")
+        
 
     # gets called every time the subscriber receives a face marker
     def receive_marker(self, msg):
