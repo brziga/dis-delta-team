@@ -39,6 +39,9 @@ class MissionController : public rclcpp::Node {
       _explorerJobPublisher = this->create_publisher<delta_interfaces::msg::ExplorerJob>("explorer_job", 1);
       
       _decisionTimer = this->create_wall_timer(500ms, std::bind(&MissionController::makeDecision, this));
+      
+      // start witch exploring so that the explorer node can undock the robot first
+      switchStatus(continueExploring);
     }
   private:
     rclcpp::TimerBase::SharedPtr _decisionTimer;
