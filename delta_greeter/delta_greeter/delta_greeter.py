@@ -7,12 +7,17 @@ from threading import Thread
 
 import time
 
-
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
 from nav2_msgs.action import Spin, NavigateToPose
 from turtle_tf2_py.turtle_tf2_broadcaster import quaternion_from_euler
 from rclpy.action import ActionClient
+
+# publishing markers
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import PointStamped
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+from builtin_interfaces.msg import Duration
 
 class RobotController:
 
@@ -26,6 +31,11 @@ class RobotController:
         self._nav_to_pose_client = ActionClient(self._node, NavigateToPose, 'navigate_to_pose')
         self._spin_client = ActionClient(self._node, Spin, 'spin')
         
+        self._move_x = None
+        self._move_y = None
+        self._move_rot = None
+        self._rotate_rot = None
+        
         
     def YawToQuaternion(self, angle_z = 0.):
         quat_tf = quaternion_from_euler(0, 0, angle_z)
@@ -36,6 +46,9 @@ class RobotController:
 
 
     def move_to_position(self, x, y, rot):
+        self._move_x = x
+        self._move_y = y
+        self._move_rot = rot
         
         self._arrived = False
           
@@ -61,6 +74,7 @@ class RobotController:
         self._send_move_goal_future.add_done_callback(self.move_goal_response_callback)
         
     def rotate(self, spin_dist_in_degree):
+        self._rotate_rot = spin_dist_in_degree
     
         self._rotation_complete = False
     
@@ -80,7 +94,7 @@ class RobotController:
         goal_handle = future.result()
         if not goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
-            self._arrived = True
+            self.move_to_position(self._move_x, self._move_y, self._move_rot)
             return
 
         self._node.get_logger().info('Goal accepted :)')
@@ -92,7 +106,7 @@ class RobotController:
         goal_handle = future.result()
         if not goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
-            self._rotation_complete = True
+            self.rotate(self._rotate_rot)
             return
 
         self._node.get_logger().info('Goal accepted :)')
@@ -135,6 +149,9 @@ class Greeter(Node):
         # robot controller
         self.rc = RobotController(self)
         
+        # For publishing the markers
+        self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
+        
 
     def publish_status(self):
         msg = JobStatus()
@@ -163,16 +180,24 @@ class Greeter(Node):
         while not self.rc._arrived:
                 time.sleep(1)
                 self.get_logger().info('waiting until robot arrives at person')
+                # Publish a marker
+                self.send_marker(position_x, position_y)
+                self.send_marker(position_x - 0.1, position_y, 1, 0.15, "greet_person_nav_goal")
+                
+                
         # greeting the person
         self.get_logger().info('.__________________________________________.')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
-        self.get_logger().info('|        Dober dan, person object :)       |')
+        self.get_logger().info('|        Dober dan, person        :)       |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('.__________________________________________.')
+        
+        self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
+        
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
@@ -181,6 +206,53 @@ class Greeter(Node):
     def destroyNode(self):
         self.rc._nav_to_pose_client.destroy()
         super().destroy_node()
+        
+    def send_marker(self, x, y, marker_id = 0, scale = 0.1, text = ""):
+        point_in_map_frame = PointStamped()
+        point_in_map_frame.header.frame_id = "/map"
+        point_in_map_frame.header.stamp = self.get_clock().now().to_msg()
+
+        point_in_map_frame.point.x = x
+        point_in_map_frame.point.y = y
+        point_in_map_frame.point.z = 1.0
+        
+        marker = self.create_marker(point_in_map_frame, marker_id, scale, text)
+        self.marker_pub.publish(marker)
+            
+            
+    def create_marker(self, point_stamped, marker_id, scale, text):
+        marker = Marker()
+
+        marker.header = point_stamped.header
+        
+        if text == "":
+            marker.type = marker.SPHERE
+        else:
+            marker.type = marker.TEXT_VIEW_FACING
+            
+        marker.action = marker.ADD
+        marker.id = marker_id
+        marker.lifetime = Duration(sec=2)
+        marker.text = text
+
+        # Set the scale of the marker
+        scale = scale
+        marker.scale.x = scale
+        marker.scale.y = scale
+        marker.scale.z = scale
+
+        # Set the color
+        marker.color.r = 0.0
+        marker.color.g = 0.5
+        marker.color.b = 0.1
+        marker.color.a = 1.0
+
+        # Set the pose of the marker
+        marker.pose.position.x = point_stamped.point.x
+        marker.pose.position.y = point_stamped.point.y
+        marker.pose.position.z = point_stamped.point.z
+
+        return marker
 
 
 

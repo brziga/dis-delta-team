@@ -7,6 +7,18 @@ from threading import Thread
 
 import time
 
+# robot controller imports
+from geometry_msgs.msg import Quaternion, PoseStamped
+from nav2_msgs.action import Spin, NavigateToPose
+from turtle_tf2_py.turtle_tf2_broadcaster import quaternion_from_euler
+from rclpy.action import ActionClient
+
+# publishing markers
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import PointStamped
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+from builtin_interfaces.msg import Duration
+
 
 
 # robot commander ----------------------------------------------------------------------------------
@@ -309,6 +321,11 @@ class RobotController:
         self._nav_to_pose_client = ActionClient(self._node, NavigateToPose, 'navigate_to_pose')
         self._spin_client = ActionClient(self._node, Spin, 'spin')
         
+        self._move_x = None
+        self._move_y = None
+        self._move_rot = None
+        self._rotate_rot = None
+        
         
     def YawToQuaternion(self, angle_z = 0.):
         quat_tf = quaternion_from_euler(0, 0, angle_z)
@@ -319,6 +336,9 @@ class RobotController:
 
 
     def move_to_position(self, x, y, rot):
+        self._move_x = x
+        self._move_y = y
+        self._move_rot = rot
         
         self._arrived = False
           
@@ -344,6 +364,7 @@ class RobotController:
         self._send_move_goal_future.add_done_callback(self.move_goal_response_callback)
         
     def rotate(self, spin_dist_in_degree):
+        self._rotate_rot = spin_dist_in_degree
     
         self._rotation_complete = False
     
@@ -363,6 +384,7 @@ class RobotController:
         goal_handle = future.result()
         if not goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
+            self.move_to_position(self._move_x, self._move_y, self._move_rot)
             self._arrived = True
             return
 
@@ -375,7 +397,7 @@ class RobotController:
         goal_handle = future.result()
         if not goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
-            self._rotation_complete = True
+            self.rotate(self._rotate_rot)
             return
 
         self._node.get_logger().info('Goal accepted :)')
@@ -434,7 +456,7 @@ class Explorer(Node):
         # USE FLOATS!! 0.0 INSTEAD OF 0 FOR EXAMPLE
         self.explorationPoints = [
         [[-0.3, 0.0, left], c_half],
-        [[-0.3, -1.0, downRight], ac_quater],
+        [[-0.3, -1.0, down], ac_half],
         [[0.5, -2.0, up], ac_quater],
         [[2.0, -1.7, up], c_quater],
         [[3.5, -1.3, up], c_half],
@@ -467,6 +489,9 @@ class Explorer(Node):
         
         # robot controller
         self.rc = RobotController(self)
+        
+        # For publishing the markers
+        self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
         
     def publish_status(self):
         msg = JobStatus()
@@ -544,6 +569,9 @@ class Explorer(Node):
             while not self.rc._arrived:
                 time.sleep(1)
                 self.get_logger().info('waiting until robot arrives at goal position')
+                # Publish a marker
+                self.send_marker(nextPoint[0], nextPoint[1])
+                self.send_marker(nextPoint[0] - 0.1, nextPoint[1], 1, 0.15, "explorer_nav_goal")
             
             # rotate at that point
             nextRotation = self.explorationPoints[self.explorationPointIndex][1]
@@ -553,6 +581,9 @@ class Explorer(Node):
                 while not self.rc._rotation_complete:
                     time.sleep(1)
                     self.get_logger().info('waiting until robot rotated')
+                    # Publish a marker
+                    self.send_marker(nextPoint[0], nextPoint[1])
+                    self.send_marker(nextPoint[0] - 0.1, nextPoint[1], 1, 0.15, "rotating: "+str(nextRotation)+"_rad")
             
             # check here if movement goal and rotation goal was successfull before incrementing?
             self.increment_exploration_point_index()
@@ -573,6 +604,54 @@ class Explorer(Node):
         self.explorationPointIndex = self.explorationPointIndex + 1
         if self.explorationPointIndex >= len(self.explorationPoints):
             self.explorationPointIndex = 0
+            
+            
+    def send_marker(self, x, y, marker_id = 0, scale = 0.1, text = ""):
+        point_in_map_frame = PointStamped()
+        point_in_map_frame.header.frame_id = "/map"
+        point_in_map_frame.header.stamp = self.get_clock().now().to_msg()
+
+        point_in_map_frame.point.x = x
+        point_in_map_frame.point.y = y
+        point_in_map_frame.point.z = 1.0
+        
+        marker = self.create_marker(point_in_map_frame, marker_id, scale, text)
+        self.marker_pub.publish(marker)
+            
+            
+    def create_marker(self, point_stamped, marker_id, scale, text):
+        marker = Marker()
+
+        marker.header = point_stamped.header
+        
+        if text == "":
+            marker.type = marker.SPHERE
+        else:
+            marker.type = marker.TEXT_VIEW_FACING
+            
+        marker.action = marker.ADD
+        marker.id = marker_id
+        marker.lifetime = Duration(sec=2)
+        marker.text = text
+
+        # Set the scale of the marker
+        scale = scale
+        marker.scale.x = scale
+        marker.scale.y = scale
+        marker.scale.z = scale
+
+        # Set the color
+        marker.color.r = 0.0
+        marker.color.g = 0.5
+        marker.color.b = 1.0
+        marker.color.a = 1.0
+
+        # Set the pose of the marker
+        marker.pose.position.x = point_stamped.point.x
+        marker.pose.position.y = point_stamped.point.y
+        marker.pose.position.z = point_stamped.point.z
+
+        return marker
             
     def destroyNode(self):
         self.rc._nav_to_pose_client.destroy()
