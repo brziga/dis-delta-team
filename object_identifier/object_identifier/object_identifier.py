@@ -14,6 +14,13 @@ from rclpy.duration import Duration
 from geometry_msgs.msg import PointStamped
 import tf2_geometry_msgs as tfg
 
+# publishing markers
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import PointStamped
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+from builtin_interfaces.msg import Duration
+
+
 # structure to store the currently known level objects
 class CurrentLevelObjects:
     def __init__(self, position_x, position_y, position_z, rotation, object_id, number_of_objects):
@@ -45,8 +52,13 @@ class LevelObjectIdentifier(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         
+        # For publishing the markers
+        self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.RELIABLE)
+        
         #for testing
-        #self.insert_level_object(.1, .2, .3, 0.0,"person_1")
+        #self.insert_level_object(1.0, 2.0, .3, 0.0,"person_1")
+        #self.insert_level_object(-1.0, -2.0, .3, 0.0,"person_2")
+        #self.insert_level_object(1.0, 4.0, .3, 0.0,"person_3")
         
 
     # gets called every time the subscriber receives a face marker
@@ -149,7 +161,67 @@ class LevelObjectIdentifier(Node):
         msg.number_of_objects = current_level_objects.number_of_objects
         
         self.publisher_.publish(msg)
+        self.publish_level_object_markers()
         #self.get_logger().info('Publishing %d level objects' % msg.number_of_objects)
+        
+    def publish_level_object_markers(self):
+        for i in range(self.current_level_objects_.number_of_objects):
+            x = self.current_level_objects_.position_x[i]
+            y = self.current_level_objects_.position_y[i]
+            object_id = self.current_level_objects_.object_id[i]
+            
+            self.send_marker(x, y, 2 * i + 1000)
+            self.send_marker(x - 0.15, y, 2 * i + 1000 + 1, 0.15, object_id)
+        
+        
+        
+        # send marker when a new level object is discovered
+    def send_marker(self, x, y, marker_id, scale = 0.1, text = ""):
+        point_in_map_frame = PointStamped()
+        point_in_map_frame.header.frame_id = "/map"
+        point_in_map_frame.header.stamp = self.get_clock().now().to_msg()
+
+        point_in_map_frame.point.x = x
+        point_in_map_frame.point.y = y
+        point_in_map_frame.point.z = 1.0
+        
+        marker = self.create_marker(point_in_map_frame, marker_id, scale, text)
+        self.marker_pub.publish(marker)
+            
+            
+    def create_marker(self, point_stamped, marker_id, scale, text):
+        marker = Marker()
+
+        marker.header = point_stamped.header
+        
+        if text == "":
+            marker.type = marker.SPHERE
+        else:
+            marker.type = marker.TEXT_VIEW_FACING
+            
+        marker.action = marker.ADD
+        marker.id = marker_id
+        marker.lifetime = Duration(sec=3)
+        marker.text = text
+
+        # Set the scale of the marker
+        scale = scale
+        marker.scale.x = scale
+        marker.scale.y = scale
+        marker.scale.z = scale
+
+        # Set the color
+        marker.color.r = 1.0
+        marker.color.g = 0.3
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+
+        # Set the pose of the marker
+        marker.pose.position.x = point_stamped.point.x
+        marker.pose.position.y = point_stamped.point.y
+        marker.pose.position.z = point_stamped.point.z
+
+        return marker
 
 
 
