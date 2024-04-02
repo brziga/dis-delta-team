@@ -117,7 +117,7 @@ class LevelObjectIdentifier(Node):
         point_in_robot_frame.point.z = robot_frame_z
         
         time_now = rclpy.time.Time()
-        timeout = Duration(seconds=0.1)
+        timeout = rclpy.duration.Duration(seconds=0.1)
 
         try:
             trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
