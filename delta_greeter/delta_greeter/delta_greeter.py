@@ -8,6 +8,7 @@ from threading import Thread
 import time
 import os
 import pyttsx3
+import librosa
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -20,6 +21,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PointStamped
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from builtin_interfaces.msg import Duration
+from irobot_create_msgs.msg import AudioNoteVector, AudioNote
 
 class RobotController:
 
@@ -157,6 +159,8 @@ class Greeter(Node):
         self.tts_engine = pyttsx3.init()
         self.tts_engine.setProperty("rate", 160) # default rate is 200; subtracting 40 seems to sound better
 
+        self.cmd_audio_publisher = self.create_publisher(AudioNoteVector, "/cmd_audio", 1)
+
     def publish_status(self):
         msg = JobStatus()
         msg.acting = self.currently_executing_job
@@ -204,9 +208,14 @@ class Greeter(Node):
         self.get_logger().info('.__________________________________________.')
         # ...and vocally
         self.tts_engine.say("Hello person {:2d}! Have a nice day!".format(person_id))
-        self.tts_engine.save_to_file("This is saved to a file.", "voice_greeting")
-        print("Current working directory is:", os.getcwd())
+        self.tts_engine.save_to_file("Hello person {:2d}! Have a nice day!".format(person_id), "greeting_audio_clip.wav")
+        # print("Current working directory is:", os.getcwd())
         self.tts_engine.runAndWait()
+        notes = self.makeNoteArrayFromAudioFile("greeting_audio_clip.wav")
+        msg_aud_note_vect = AudioNoteVector()
+        msg_aud_note_vect.append=False
+        msg_aud_note_vect.notes=self.constructNoteVector(notes)
+        self.cmd_audio_publisher.publish(msg_aud_note_vect)
         
         self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
         
@@ -214,7 +223,36 @@ class Greeter(Node):
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
         self.publish_status()
-        
+    
+    def makeNoteArrayFromAudioFile(self, audiofilename):
+        y, sr = librosa.load(audiofilename)
+
+        # Calculate onset envelopes
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        # Detect onsets
+        onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
+        # Extract pitches
+        pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+        # Calculate time intervals
+        hop_length = 512  # Adjust as needed
+        frame_duration = hop_length / sr
+        times = librosa.times_like(pitches, sr=sr, hop_length=hop_length)
+        # Create list of (frequency, time_interval) pairs
+        frequency_time_pairs = list(zip(pitches.max(axis=0), times))
+        return frequency_time_pairs
+
+    def constructNoteVector(self, note_array):
+        # from given note array, construct a irobot_create_msgs/msg/AudioNoteVector.notes
+        output_notes = []
+        for pair in note_array:
+            # ew_note = {"frequency": pair[0], "max_runtime": Duration(sec=0, nanosec=int(round(pair[1]*1e9)))}
+            new_note = AudioNote()
+            new_note.frequency = int(round(pair[0]))
+            new_note.max_runtime = Duration(sec=0, nanosec=int(round(pair[1]*1e9)))
+            output_notes.append(new_note)
+
+        return output_notes
+
     def destroyNode(self):
         self.rc._nav_to_pose_client.destroy()
         super().destroy_node()
