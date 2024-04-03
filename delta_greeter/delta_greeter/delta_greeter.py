@@ -6,6 +6,8 @@ from delta_interfaces.msg import JobStatus
 from threading import Thread
 
 import time
+import os
+import pyttsx3
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -152,6 +154,8 @@ class Greeter(Node):
         # For publishing the markers
         self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
         
+        self.tts_engine = pyttsx3.init()
+        self.tts_engine.setProperty("rate", 160) # default rate is 200; subtracting 40 seems to sound better
 
     def publish_status(self):
         msg = JobStatus()
@@ -186,6 +190,7 @@ class Greeter(Node):
                 
                 
         # greeting the person
+        # ...in command line
         self.get_logger().info('.__________________________________________.')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
@@ -195,6 +200,11 @@ class Greeter(Node):
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('.__________________________________________.')
+        # ...and vocally
+        self.tts_engine.say("Hello person! Have a nice day!")
+        self.tts_engine.save_to_file("This is saved to a file.", "voice_greeting")
+        print("Current working directory is:", os.getcwd())
+        self.tts_engine.runAndWait()
         
         self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
         
