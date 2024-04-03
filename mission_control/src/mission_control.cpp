@@ -259,6 +259,7 @@ class MissionController : public rclcpp::Node {
             message.position_z = _levelObjects.z[i];
             message.rotation = _levelObjects.rot[i];
             message.job_id = _sentJobId;
+            message.person_id = _nextPersonToGreetId;
             _greeterJobPublisher->publish(message);
             return;
         }

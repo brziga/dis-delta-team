@@ -6,6 +6,8 @@ from delta_interfaces.msg import JobStatus
 from threading import Thread
 
 import time
+import os
+import pyttsx3
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -152,6 +154,8 @@ class Greeter(Node):
         # For publishing the markers
         self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
         
+        self.tts_engine = pyttsx3.init()
+        self.tts_engine.setProperty("rate", 160) # default rate is 200; subtracting 40 seems to sound better
 
     def publish_status(self):
         msg = JobStatus()
@@ -168,12 +172,14 @@ class Greeter(Node):
             self.currently_executing_job = True
             self.publish_status()
 
-        thread = Thread(target=self.greet_a_person, args=(msg.position_x, msg.position_y, msg.position_z, msg.rotation))
+        thread = Thread(target=self.greet_a_person, args=(msg.position_x, msg.position_y, msg.position_z, msg.rotation, msg.person_id))
         thread.start()
         
     
-    def greet_a_person(self, position_x, position_y, position_z, rotation):
+    def greet_a_person(self, position_x, position_y, position_z, rotation, person_id):
             
+        person_id = int(person_id.split("_")[-1])
+
         # moving to person
         self.get_logger().info('moving to greet person at (x: %f  y: %f  rot: %f)' % (position_x, position_y, rotation))
         self.rc.move_to_position(position_x, position_y, rotation)
@@ -186,15 +192,21 @@ class Greeter(Node):
                 
                 
         # greeting the person
+        # ...in command line
         self.get_logger().info('.__________________________________________.')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
-        self.get_logger().info('|        Dober dan, person        :)       |')
+        self.get_logger().info('|        Dober dan, person {:2d}     :)       |'.format(person_id))
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('.__________________________________________.')
+        # ...and vocally
+        self.tts_engine.say("Hello person {:2d}! Have a nice day!".format(person_id))
+        self.tts_engine.save_to_file("This is saved to a file.", "voice_greeting")
+        print("Current working directory is:", os.getcwd())
+        self.tts_engine.runAndWait()
         
         self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
         
