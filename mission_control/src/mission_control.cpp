@@ -13,6 +13,8 @@ using namespace std;
 #include "rclcpp/rclcpp.hpp"
 
 #include "delta_interfaces/msg/level_objects.hpp"
+#include "delta_interfaces/msg/cylinder_objects.hpp"
+#include "delta_interfaces/msg/ring_objects.hpp"
 
 #include "delta_interfaces/msg/job_status.hpp"
 #include "delta_interfaces/msg/greeter_job.hpp"
@@ -26,7 +28,14 @@ class MissionController : public rclcpp::Node {
     MissionController() : Node("mission_controller") {
        // getting level objects
        _levelObjectsSuscription = this->create_subscription<delta_interfaces::msg::LevelObjects>(
-         "level_objects", 1, std::bind(&MissionController::receiveLevelObjectsUpdate, this, std::placeholders::_1));
+         "level_objects", 1000, std::bind(&MissionController::receiveLevelObjectsUpdate, this, std::placeholders::_1)); 
+       // getting ring objects
+       _ringObjectsSuscription = this->create_subscription<delta_interfaces::msg::RingObjects>(
+         "ring_objects", 1000, std::bind(&MissionController::receiveRingObjectsUpdate, this, std::placeholders::_1));
+       // getting cylinder objects
+       _cylinderObjectsSuscription = this->create_subscription<delta_interfaces::msg::CylinderObjects>(
+         "cylinder_objects", 1000, std::bind(&MissionController::receiveCylinderObjectsUpdate, this, std::placeholders::_1));
+       
         
       // receiving job status
       _jobStatusSuscription = this->create_subscription<delta_interfaces::msg::JobStatus>(
@@ -59,6 +68,12 @@ class MissionController : public rclcpp::Node {
     } _levelObjects;
     mutable map<string, bool> _knownLevelObjectIds = {};
     mutable vector<string> _peopleStillToGreetIds;
+    // ring objects
+    rclcpp::Subscription<delta_interfaces::msg::RingObjects>::SharedPtr _ringObjectsSuscription;
+    mutable map<string, bool> _knownRingObjectIds = {};
+    // cylinder objects
+    rclcpp::Subscription<delta_interfaces::msg::CylinderObjects>::SharedPtr _cylinderObjectsSuscription;
+    mutable map<string, bool> _knownCylinderObjectIds = {};
     
     // sending jobs to servants stuff
     mutable bool _servantReceivedJob = false;
@@ -337,6 +352,35 @@ class MissionController : public rclcpp::Node {
       }
       
     }
+    
+    void receiveRingObjectsUpdate(const delta_interfaces::msg::RingObjects & msg) const {
+      for (int i = 0; i < static_cast<int>(msg.id.size()); i++) {
+          string id = msg.id[i];
+          if (_knownRingObjectIds.count(id) == 0) { // check if _knownRingObjectIds is not containing msg.id[i] yet
+              _knownRingObjectIds[id] = true; // add to map to keep track which object ids are known already
+              
+              RCLCPP_INFO(this->get_logger(), ">>> I heard a new ring id: '%s'", id.c_str());
+              
+              if (msg.color[i] == "green") {
+                  RCLCPP_INFO(this->get_logger(), "Wow! Thats THE GREEN RING!!!");
+              }
+          }
+          
+      }
+    }
+    
+    void receiveCylinderObjectsUpdate(const delta_interfaces::msg::CylinderObjects & msg) const {
+      for (int i = 0; i < static_cast<int>(msg.id.size()); i++) {
+          string id = msg.id[i];
+          if (_knownCylinderObjectIds.count(id) == 0) { // check if _knownCylinderObjectIds is not containing msg.id[i] yet
+              _knownCylinderObjectIds[id] = true; // add to map to keep track which object ids are known already
+              
+              RCLCPP_INFO(this->get_logger(), ">>> I heard a new cylinder id: '%s'", id.c_str());
+          }
+          
+      }
+    }
+    
 };
 
 int main(int argc, char ** argv)
