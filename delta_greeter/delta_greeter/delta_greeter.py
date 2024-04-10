@@ -7,8 +7,8 @@ from threading import Thread
 
 import time
 import os
-import pyttsx3
-import librosa
+import pyttsx3 # tts
+import librosa # for attempting to send audio to the robot's speaker
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -206,8 +206,15 @@ class Greeter(Node):
         self.get_logger().info('|                                          |')
         self.get_logger().info('|                                          |')
         self.get_logger().info('.__________________________________________.')
+
         # ...and vocally
+
+        # Greet TTS (on local machine)
         self.tts_engine.say("Hello person {:2d}! Have a nice day!".format(person_id))
+        self.tts_engine.runAndWait()
+        ##############################
+
+        # Attempt to send greet TTS to robot
         self.tts_engine.save_to_file("Hello person {:2d}! Have a nice day!".format(person_id), "greeting_audio_clip.wav")
         # print("Current working directory is:", os.getcwd())
         self.tts_engine.runAndWait()
@@ -216,6 +223,8 @@ class Greeter(Node):
         msg_aud_note_vect.append=False
         msg_aud_note_vect.notes=self.constructNoteVector(notes)
         self.cmd_audio_publisher.publish(msg_aud_note_vect)
+        #####################################
+
         
         self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
         
