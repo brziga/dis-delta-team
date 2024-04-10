@@ -68,7 +68,7 @@ class LevelObjectIdentifier(Node):
         robot_frame_z = msg.pose.position.z
         
         # transforming marker position from robot frame to map frame
-        map_position = self.transform_from_robot_to_map_frame(robot_frame_x, robot_frame_y, robot_frame_z)
+        map_position = self.transform_from_robot_to_map_frame(robot_frame_x, robot_frame_y, robot_frame_z, msg.header.stamp)
         if map_position is not None:
             self.process_face_position_in_map_frame(map_position[0], map_position[1] ,map_position[2])
 
@@ -108,10 +108,10 @@ class LevelObjectIdentifier(Node):
 
     # trys to transfer the given point from robot frame to map frame.
     # Returns the array [map_frame_x, map_frame_y, map_frame_z]. If it can not succeede it returns None
-    def transform_from_robot_to_map_frame(self, robot_frame_x, robot_frame_y, robot_frame_z):
+    def transform_from_robot_to_map_frame(self, robot_frame_x, robot_frame_y, robot_frame_z, header_stamp):
         point_in_robot_frame = PointStamped()
         point_in_robot_frame.header.frame_id = "/base_link"
-        point_in_robot_frame.header.stamp = self.get_clock().now().to_msg()
+        point_in_robot_frame.header.stamp = header_stamp
         point_in_robot_frame.point.x = robot_frame_x
         point_in_robot_frame.point.y = robot_frame_y
         point_in_robot_frame.point.z = robot_frame_z
