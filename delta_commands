@@ -11,3 +11,9 @@ ros2 run delta_explorer delta_explorer
 ros2 launch dis_tutorial3 sim_turtlebot_nav.launch.py
 // face detection
 ros2 run dis_tutorial3 detect_people.py
+
+// install libs for talking
+pip install pyttsx3
+pip install librosa
+sudo apt install ffmpeg
+sudo apt install espeak

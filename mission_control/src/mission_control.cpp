@@ -15,6 +15,7 @@ using namespace std;
 #include "delta_interfaces/msg/level_objects.hpp"
 #include "delta_interfaces/msg/cylinder_objects.hpp"
 #include "delta_interfaces/msg/ring_objects.hpp"
+#include "delta_interfaces/msg/say_text.hpp"
 
 #include "delta_interfaces/msg/job_status.hpp"
 #include "delta_interfaces/msg/greeter_job.hpp"
@@ -35,7 +36,9 @@ class MissionController : public rclcpp::Node {
        // getting cylinder objects
        _cylinderObjectsSuscription = this->create_subscription<delta_interfaces::msg::CylinderObjects>(
          "cylinder_objects", 1000, std::bind(&MissionController::receiveCylinderObjectsUpdate, this, std::placeholders::_1));
-       
+         
+       // say things
+       _sayTextPublisher = this->create_publisher<delta_interfaces::msg::SayText>("say_text", 10);
         
       // receiving job status
       _jobStatusSuscription = this->create_subscription<delta_interfaces::msg::JobStatus>(
@@ -75,6 +78,10 @@ class MissionController : public rclcpp::Node {
     rclcpp::Subscription<delta_interfaces::msg::CylinderObjects>::SharedPtr _cylinderObjectsSuscription;
     mutable map<string, bool> _knownCylinderObjectIds = {};
     
+    // saying things
+    rclcpp::Publisher<delta_interfaces::msg::SayText>::SharedPtr _sayTextPublisher;
+    mutable vector<string> _textsToSay;
+    
     // sending jobs to servants stuff
     mutable bool _servantReceivedJob = false;
     mutable bool _servantHasFinishedJob = false;
@@ -108,6 +115,12 @@ class MissionController : public rclcpp::Node {
     
     
     void makeDecision() {
+    
+        if (_textsToSay.size() > 0) {
+            string text = _textsToSay.back(); //[lastIndex];
+            _textsToSay.pop_back();  //.erase(lastIndex);
+            sendSayTextMsg(text);
+        }
     
         if(missionComplete()) {
             displayVictoryText();
@@ -205,6 +218,16 @@ class MissionController : public rclcpp::Node {
     
     bool missionComplete() {
         return _greetedPeople >= _peopleToGreetForVictory;
+    }
+    
+    void sayText(string textToSay) {
+        _textsToSay.insert(_textsToSay.begin(), textToSay);
+    }
+    
+    void sendSayTextMsg(string textToSay) {
+        auto message = delta_interfaces::msg::SayText();
+        message.text = textToSay;
+        _sayTextPublisher->publish(message);
     }
     
     void displayVictoryText() {
@@ -363,6 +386,9 @@ class MissionController : public rclcpp::Node {
               
               if (msg.color[i] == "green") {
                   RCLCPP_INFO(this->get_logger(), "Wow! Thats THE GREEN RING!!!");
+                  _textsToSay.insert(_textsToSay.begin(), "WOW, you are the "+ msg.color[i] + " ring. I will remember you for later");
+              } else {
+                  _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " ring");
               }
           }
           
@@ -376,6 +402,7 @@ class MissionController : public rclcpp::Node {
               _knownCylinderObjectIds[id] = true; // add to map to keep track which object ids are known already
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new cylinder id: '%s'", id.c_str());
+              _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " cylinder");
           }
           
       }
