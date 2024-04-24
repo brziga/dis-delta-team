@@ -20,9 +20,10 @@ using namespace std;
 #include "delta_interfaces/msg/job_status.hpp"
 #include "delta_interfaces/msg/greeter_job.hpp"
 #include "delta_interfaces/msg/explorer_job.hpp"
+#include "delta_interfaces/msg/parking_job.hpp"
 
 
-enum MissionStatus { ready, continueExploring, stopExploring, greetingPerson };
+enum MissionStatus { ready, continueExploring, stopExploring, greetingPerson, parking };
 
 class MissionController : public rclcpp::Node {
   public:
@@ -46,6 +47,9 @@ class MissionController : public rclcpp::Node {
         
       // sending greeter jobs
       _greeterJobPublisher = this->create_publisher<delta_interfaces::msg::GreeterJob>("greeter_job", 1);
+      
+      // sending parking jobs
+      _parkingJobPublisher = this->create_publisher<delta_interfaces::msg::ParkingJob>("parking_job", 1);
       
       // sending explorer jobs
       _explorerJobPublisher = this->create_publisher<delta_interfaces::msg::ExplorerJob>("explorer_job", 1);
@@ -100,11 +104,20 @@ class MissionController : public rclcpp::Node {
     mutable string _nextPersonToGreetId = "";
     rclcpp::Publisher<delta_interfaces::msg::GreeterJob>::SharedPtr _greeterJobPublisher;
     
+    // parking stuff
+    mutable double _nextParkPositionX = 0;
+    mutable double _nextParkPositionY = 0;
+    rclcpp::Publisher<delta_interfaces::msg::ParkingJob>::SharedPtr _parkingJobPublisher;
     
-    //i need to remember in a bool if the sent job has ever arrived -> even if it changes then i know the job is completed.
-    //this bool has to be reseted to false every time a new job has to be sent!!
-    //i dont need to store the _greeterCurrentJobId, but i can just set the mentioned bool whenever a message arrives!
-    //actually _sentJobId can be the same for greeting and start and stop exploring
+    // task2: counting rings and cylinders
+    const int _ringsToGreet = 3;
+    const int _cylindersToGreet = 3;
+    mutable int _greetedRings = 0;
+    mutable int _greetedCylinders = 0;
+    mutable bool _greenRingDetected = false;
+    mutable double _greenRingPositionX = 0;
+    mutable double _greenRingPositionY = 0;
+    
     
     void initNewJobId() {
         _sentJobId = "mission_control_job"+ to_string(_jobCounter);
@@ -116,17 +129,20 @@ class MissionController : public rclcpp::Node {
     
     void makeDecision() {
     
+        // send text to speaker if there is something to say
         if (_textsToSay.size() > 0) {
             string text = _textsToSay.back(); //[lastIndex];
             _textsToSay.pop_back();  //.erase(lastIndex);
             sendSayTextMsg(text);
         }
-    
+        
+        // check if task 1 mission is complete
         if(missionComplete()) {
             displayVictoryText();
             _decisionTimer->cancel();
             return;
         }
+        
         
         //RCLCPP_INFO(this->get_logger(), "servant - received job: '%d'", _servantReceivedJob);
         //RCLCPP_INFO(this->get_logger(), "servant - has finished job: '%d'", _servantHasFinishedJob);
@@ -138,8 +154,13 @@ class MissionController : public rclcpp::Node {
                 // need to greet someone!
                 switchStatus(greetingPerson);
                 
+            } else if (needToParkUnderGreenRing()) {
+                // need to park
+                _nextParkPositionX = _greenRingPositionX;
+                _nextParkPositionY = _greenRingPositionY;
+                switchStatus(parking);
             } else {
-                // i dont need to greet anyone so i go exlore =)
+                // i dont need to do anything else so i go exlore =)
                 switchStatus(continueExploring);
             }
         }
@@ -165,6 +186,11 @@ class MissionController : public rclcpp::Node {
                     RCLCPP_INFO(this->get_logger(), "continueExploring : need to greet someone, stopping exploration");
                     switchStatus(stopExploring);
                 
+                } else if (needToParkUnderGreenRing()) {
+                    // robot has to park under green ring -> switch to stop exploration status
+                    RCLCPP_INFO(this->get_logger(), "continueExploring : need to park under green ring, stopping exploration");
+                    switchStatus(stopExploring);
+                    
                 // the robot is exploring as it should. nothing to do here
                 } else {
                     RCLCPP_INFO(this->get_logger(), "continueExploring : I am exploring right now!");
@@ -211,6 +237,33 @@ class MissionController : public rclcpp::Node {
                 // greeter is done. ready for new task
                 RCLCPP_INFO(this->get_logger(), "greetingPerson : greeting finished. getting ready for new task");
                 _greetedPeople++;
+                switchStatus(ready);
+            }
+        }
+        
+        
+        // the robot is currently parking
+        else if (_myStatus == parking) {
+        
+            // delta_parking has not received job yet -> sending job
+            if (!_servantReceivedJob) {
+                RCLCPP_INFO(this->get_logger(), "parking : sending job");
+                sendParkingJob();
+            }
+            
+            // delta_parking has already received job but not finished yet
+            else if (!_servantHasFinishedJob) {
+                // give delta_parking time to park
+                RCLCPP_INFO(this->get_logger(), "parking : waiting for delta_parker to park");
+                
+            } else {
+                // for task 2 we are done now. so we can exit here.
+                RCLCPP_INFO(this->get_logger(), " >>> PARKING DONE, TASK 2 COMPLETE <<<");
+                _decisionTimer->cancel();
+                return;
+                
+                // parking is done. ready for new task
+                RCLCPP_INFO(this->get_logger(), "parking : finished. getting ready for new task");
                 switchStatus(ready);
             }
         }
@@ -270,6 +323,10 @@ class MissionController : public rclcpp::Node {
             _nextPersonToGreetId = popPersonToGreetAndReturnId();
             RCLCPP_INFO(this->get_logger(), "greetingPerson : sending job");
             sendGreeterJob();
+        } else if (newStatus == parking) {
+            initNewJobId();
+            RCLCPP_INFO(this->get_logger(), "parking : sending job");
+            sendParkingJob();
         }
     }
     
@@ -302,6 +359,14 @@ class MissionController : public rclcpp::Node {
             return;
         }
         RCLCPP_INFO(this->get_logger(), "ERROR: person that has to be greeted is not in the list of all level object");
+    }
+    
+    void sendParkingJob() {
+        auto message = delta_interfaces::msg::ParkingJob();
+        message.position_x = _nextParkPositionX;
+        message.position_y = _nextParkPositionY;
+        message.job_id = _sentJobId;
+        _parkingJobPublisher->publish(message);
     }
     
     void sendContinueExplorationJob() {
@@ -376,6 +441,12 @@ class MissionController : public rclcpp::Node {
       
     }
     
+    
+    bool needToParkUnderGreenRing() {
+        return _greenRingDetected && _greetedRings >= _ringsToGreet && _greetedCylinders >= _cylindersToGreet;
+    }
+    
+    
     void receiveRingObjectsUpdate(const delta_interfaces::msg::RingObjects & msg) const {
       for (int i = 0; i < static_cast<int>(msg.id.size()); i++) {
           string id = msg.id[i];
@@ -383,8 +454,13 @@ class MissionController : public rclcpp::Node {
               _knownRingObjectIds[id] = true; // add to map to keep track which object ids are known already
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new ring id: '%s'", id.c_str());
+              _greetedRings++;
               
               if (msg.color[i] == "green") {
+                  _greenRingDetected = true;
+                  _greenRingPositionX = msg.position_x[i];
+                  _greenRingPositionY = msg.position_y[i];
+                  
                   RCLCPP_INFO(this->get_logger(), "Wow! Thats THE GREEN RING!!!");
                   _textsToSay.insert(_textsToSay.begin(), "WOW, you are the "+ msg.color[i] + " ring. I will remember you for later");
               } else {
@@ -403,6 +479,7 @@ class MissionController : public rclcpp::Node {
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new cylinder id: '%s'", id.c_str());
               _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " cylinder");
+              _greetedCylinders++;
           }
           
       }

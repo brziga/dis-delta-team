@@ -20,10 +20,10 @@ class PubDemo(Node):
     def publishStuff(self):
         self.get_logger().info('publishing')
     
-        ring_msg = RingObjects() # rings at (1,1,1), (2,2,2) and (3,3,3)
-        ring_msg.position_x = [1.0, 2.0, 3.0]
-        ring_msg.position_y = [1.0, 2.0, 3.0]
-        ring_msg.position_z = [1.0, 2.0, 3.0]
+        ring_msg = RingObjects() # rings at (1,1,1), (2,2,2) and (-0.5,0,0)
+        ring_msg.position_x = [1.0, 2.0, -1.2]
+        ring_msg.position_y = [1.0, 2.0, 1.7]
+        ring_msg.position_z = [1.0, 2.0, 0.0]
         ring_msg.color = ["red", "blue", "green"]
         ring_msg.id = ["ring_1", "ring_2", "ring_3"]
         self.ring_publisher.publish(ring_msg)

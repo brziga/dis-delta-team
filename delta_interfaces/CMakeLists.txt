@@ -17,6 +17,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RingObjects.msg"
   "msg/CylinderObjects.msg"
   "msg/SayText.msg"
+  "msg/ParkingJob.msg"
   "srv/Empty.srv"
 )
 
