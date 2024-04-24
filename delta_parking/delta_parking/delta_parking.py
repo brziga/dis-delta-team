@@ -60,7 +60,7 @@ class RobotController:
         goal_pose.header.stamp = self._node.get_clock().now().to_msg()
         goal_pose.pose.position.x = x
         goal_pose.pose.position.y = y
-        #goal_pose.pose.orientation = self.YawToQuaternion(rot)
+        goal_pose.pose.orientation = self.YawToQuaternion(rot)
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = goal_pose
         goal_msg.behavior_tree = ''
