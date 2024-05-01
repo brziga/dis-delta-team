@@ -12,8 +12,10 @@ from cv_bridge import CvBridge, CvBridgeError
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import ColorRGBA
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
+from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs_py import point_cloud2 as pc2
 
 qos_profile = QoSProfile(
           durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
@@ -39,6 +41,7 @@ class RingDetector(Node):
         # Subscribe to the image and/or depth topic
         self.image_sub = self.create_subscription(Image, "/top_camera/rgb/preview/image_raw", self.image_callback, 1)
         self.depth_sub = self.create_subscription(Image, "/top_camera/rgb/preview/depth", self.depth_callback, 1)
+        self.pointcloud_sub = self.create_subscription(PointCloud2, "/top_camera/rgb/preview/depth/points", self.pointcloud_callback, qos_profile_sensor_data)
 
         #set the arm
         #self.pubarm = self.create_publisher(String, '/arm_command', 10)
@@ -56,7 +59,7 @@ class RingDetector(Node):
         #self.depth_sub = self.create_subscription(Image, "/oakd/rgb/preview/depth", self.depth_callback, 1)
 
         # Publiser for the visualization markers
-        # self.marker_pub = self.create_publisher(Marker, "/ring", QoSReliabilityPolicy.BEST_EFFORT)
+        self.marker_pub = self.create_publisher(Marker, "/parking", QoSReliabilityPolicy.BEST_EFFORT)
 
         # Object we use for transforming between coordinate frames
         # self.tf_buf = tf2_ros.Buffer()
@@ -65,10 +68,14 @@ class RingDetector(Node):
         cv2.namedWindow("Binary Image", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected contours", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected rings", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)        
+        cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)    
+
+        self.parkings = []    
 
     def image_callback(self, data):
         self.get_logger().info(f"I got a new image! Will try to find rings...")
+
+        self.parkings = []
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
@@ -126,11 +133,11 @@ class RingDetector(Node):
                 angle_diff = np.abs(e1[2] - e2[2])
 
                 # The centers of the two elipses should be within 5 pixels of each other (is there a better treshold?)
-                if dist >= 8:
+                if dist >= 5:
                     continue
 
                 # The rotation of the elipses should be whitin 4 degrees of eachother
-                if angle_diff>5:
+                if angle_diff>4:
                     continue
 
                 e1_minor_axis = e1[1][0]
@@ -174,6 +181,7 @@ class RingDetector(Node):
             # Get a bounding box, around the first ellipse ('average' of both elipsis)
             size = (e1[1][0]+e1[1][1])/2
             center = (e1[0][1], e1[0][0])
+            intcenter = (int(e1[0][1]), int(e1[0][0]))
 
             x1 = int(center[0] - size / 2)
             x2 = int(center[0] + size / 2)
@@ -184,10 +192,13 @@ class RingDetector(Node):
             y2 = int(center[1] + size / 2)
             y_min = y1 if y1 > 0 else 0
             y_max = y2 if y2 < cv_image.shape[1] else cv_image.shape[1]
+            self.parkings.append(intcenter)
+
 
         if len(candidates)>0:
                 cv2.imshow("Detected rings",cv_image)
                 cv2.waitKey(1)
+
 
     def depth_callback(self,data):
 
@@ -207,6 +218,52 @@ class RingDetector(Node):
         cv2.imshow("Depth window", image_viz)
         cv2.waitKey(1)
 
+
+    def pointcloud_callback(self, data):
+
+            # get point cloud attributes
+            height = data.height
+            width = data.width
+            point_step = data.point_step
+            row_step = data.row_step		
+
+            # iterate over face coordinates
+            for x,y in self.parkings:
+
+                # get 3-channel representation of the poitn cloud in numpy format
+                a = pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
+                a = a.reshape((height,width,3))
+
+                # read center coordinates
+                d = a[y,x,:]
+
+                # create marker
+                marker = Marker()
+
+                marker.header.frame_id = "/base_link"
+                marker.header.stamp = data.header.stamp
+
+                marker.type = Marker.SPHERE
+                marker.id = 0
+
+                # Set the scale of the marker
+                scale = 0.1
+                marker.scale.x = scale
+                marker.scale.y = scale
+                marker.scale.z = scale
+
+                # Set the color
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+                marker.color.a = 1.0
+
+                # Set the pose of the marker
+                marker.pose.position.x = float(d[0])
+                marker.pose.position.y = float(d[1])
+                marker.pose.position.z = float(d[2])
+
+                self.marker_pub.publish(marker)
 
 def main():
 
