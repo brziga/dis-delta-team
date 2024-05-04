@@ -9,13 +9,13 @@ from threading import Thread
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
-from nav2_msgs.action import Spin, NavigateToPose
+from nav2_msgs.action import Spin, NavigateToPose, DriveOnHeading
 from turtle_tf2_py.turtle_tf2_broadcaster import quaternion_from_euler
 from rclpy.action import ActionClient
 
 # publishing markers
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, Point
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from builtin_interfaces.msg import Duration
 from irobot_create_msgs.msg import AudioNoteVector, AudioNote
@@ -27,11 +27,13 @@ class RobotController:
     
         self._arrived = False
         self._rotation_complete = False
+        self._move_forward_complete = False
         self._node = node
         
         # ROS2 Action clients
         self._nav_to_pose_client = ActionClient(self._node, NavigateToPose, 'navigate_to_pose')
         self._spin_client = ActionClient(self._node, Spin, 'spin')
+        self._drive_on_heading_client = ActionClient(self._node, DriveOnHeading, "drive_on_heading")
         
         self._move_x = None
         self._move_y = None
@@ -75,13 +77,13 @@ class RobotController:
         
         self._send_move_goal_future.add_done_callback(self.move_goal_response_callback)
         
-    def rotate(self, spin_dist_in_degree):
-        self._rotate_rot = spin_dist_in_degree
+    def rotate(self, spin_dist_in_rad):
+        self._rotate_rot = spin_dist_in_rad
     
         self._rotation_complete = False
     
         goal_msg = Spin.Goal()
-        goal_msg.target_yaw = spin_dist_in_degree
+        goal_msg.target_yaw = spin_dist_in_rad
         
         while not self._spin_client.wait_for_server(timeout_sec=1.0):
             self._node.get_logger().info("'Spin' action server not available, waiting...")
@@ -91,6 +93,23 @@ class RobotController:
         
         self._send_rotate_goal_future.add_done_callback(self.rotate_goal_response_callback)
         
+    def drive_forward(self, distance = 0.15, speed = 0.5):
+        self._move_forward_complete = False
+        
+        drive_msg = DriveOnHeading.Goal()
+        targetPoint = Point()
+        targetPoint.x = distance
+        drive_msg.target = targetPoint
+        drive_msg.speed = speed
+        
+        while not self._drive_on_heading_client.wait_for_server(timeout_sec=1.0):
+            self._node.get_logger().info("'DriveOnHeading' action server not available, waiting...")
+        self._node.get_logger().info(f'Moving forward ....')
+        
+        self._send_move_forward_goal_future = self._drive_on_heading_client.send_goal_async(drive_msg, feedback_callback=self.feedback_callback)
+        
+        self._send_move_forward_goal_future.add_done_callback(self.drive_forward_response_callback)
+    
 
     def move_goal_response_callback(self, future):
         goal_handle = future.result()
@@ -115,7 +134,19 @@ class RobotController:
 
         self._get_rotate_result_future = goal_handle.get_result_async()
         self._get_rotate_result_future.add_done_callback(self.get_rotate_result_callback)
-
+        
+    def drive_forward_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self._node.get_logger().info('Goal rejected :(')
+            self.drive_forward()
+            return
+            
+        self._node.get_logger().info('Goal accepted :)')
+        
+        self._get_move_forward_result_future = goal_handle.get_result_async()
+        self._get_move_forward_result_future.add_done_callback(self.get_move_forward_callback)
+        
 
     def get_move_result_callback(self, future):
         result = future.result()
@@ -125,6 +156,9 @@ class RobotController:
         result = future.result()
         self._rotation_complete = True
         
+    def get_move_forward_callback(self, future):
+        result = future.result()
+        self._move_forward_complete = True
 
     def feedback_callback(self, feedback_msg):
         feedback = feedback_msg.feedback
@@ -153,7 +187,7 @@ class Parking(Node):
         
         # For publishing the markers
         self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
-        
+
 
     def publish_status(self):
         msg = JobStatus()
@@ -190,11 +224,26 @@ class Parking(Node):
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
+        # just testing the robots movement commands
+        self.rotate(3.14) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
+        self.move_forward(.1) # move 0.1 meters
+        
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
         self.publish_status()
         
+    def move_forward(self, distanceInMeters):
+        self.rc.drive_forward(distanceInMeters)
+        while not self.rc._move_forward_complete:
+                time.sleep(1)
+                self.get_logger().info('moving forward')
+                
+    def rotate(self, angleInRad):
+        self.rc.rotate(angleInRad)
+        while not self.rc._rotation_complete:
+                time.sleep(1)
+                self.get_logger().info('rotating')
 
     def send_marker(self, x, y, marker_id = 0, scale = 0.1, text = ""):
         point_in_map_frame = PointStamped()

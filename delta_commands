@@ -8,9 +8,14 @@ ros2 run delta_explorer delta_explorer
 
 // download and build dis_tutorial3 from https://github.com/vicoslab/dis_tutorial3
 // gazebo and ris
-ros2 launch dis_tutorial3 sim_turtlebot_nav.launch.py
+//ros2 launch dis_tutorial3 sim_turtlebot_nav.launch.py
+// new:
+ros2 launch dis_tutorial7 sim_turtlebot_nav.launch.py
 // face detection
 ros2 run dis_tutorial3 detect_people.py
+
+// arm mover
+ros2 run dis_tutorial7 arm_mover_actions.py
 
 // install libs for talking
 pip install pyttsx3
