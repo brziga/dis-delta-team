@@ -26,3 +26,6 @@ pip install pyttsx3
 pip install librosa
 sudo apt install ffmpeg
 sudo apt install espeak
+
+// link to dis_tutorials:
+github.com/vicoslab/dis_tutorial3

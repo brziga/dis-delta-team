@@ -7,6 +7,14 @@ from delta_interfaces.msg import ParkingJob
 from delta_interfaces.msg import JobStatus
 from threading import Thread
 
+# for transforming between coordinate frames
+from tf2_ros.buffer import Buffer
+from tf2_ros import TransformException
+from tf2_ros.transform_listener import TransformListener
+from rclpy.duration import Duration
+from geometry_msgs.msg import PointStamped
+import tf2_geometry_msgs as tfg
+
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
 from nav2_msgs.action import Spin, NavigateToPose, DriveOnHeading
@@ -20,6 +28,9 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from builtin_interfaces.msg import Duration
 from irobot_create_msgs.msg import AudioNoteVector, AudioNote
 
+# for moving arm
+from std_msgs.msg import String as String_msg
+
 
 class RobotController:
 
@@ -28,6 +39,7 @@ class RobotController:
         self._arrived = False
         self._rotation_complete = False
         self._move_forward_complete = False
+        self._task_canceled = False
         self._node = node
         
         # ROS2 Action clients
@@ -112,40 +124,40 @@ class RobotController:
     
 
     def move_goal_response_callback(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        if not self.goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
             self.move_to_position(self._move_x, self._move_y, self._move_rot)
             return
 
         self._node.get_logger().info('Goal accepted :)')
 
-        self._get_move_result_future = goal_handle.get_result_async()
-        self._get_move_result_future.add_done_callback(self.get_move_result_callback)
+        self.result_future = self.goal_handle.get_result_async()
+        self.result_future.add_done_callback(self.get_move_result_callback)
         
     def rotate_goal_response_callback(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        if not self.goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
             self.rotate(self._rotate_rot)
             return
 
         self._node.get_logger().info('Goal accepted :)')
 
-        self._get_rotate_result_future = goal_handle.get_result_async()
-        self._get_rotate_result_future.add_done_callback(self.get_rotate_result_callback)
+        self.result_future = self.goal_handle.get_result_async()
+        self.result_future.add_done_callback(self.get_rotate_result_callback)
         
     def drive_forward_response_callback(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        if not self.goal_handle.accepted:
             self._node.get_logger().info('Goal rejected :(')
             self.drive_forward()
             return
             
         self._node.get_logger().info('Goal accepted :)')
         
-        self._get_move_forward_result_future = goal_handle.get_result_async()
-        self._get_move_forward_result_future.add_done_callback(self.get_move_forward_callback)
+        self.result_future = self.goal_handle.get_result_async()
+        self.result_future.add_done_callback(self.get_move_forward_callback)
         
 
     def get_move_result_callback(self, future):
@@ -162,6 +174,21 @@ class RobotController:
 
     def feedback_callback(self, feedback_msg):
         feedback = feedback_msg.feedback
+        
+    def get_cancel_task_callback(self, future):
+         result = future.result()
+         self._task_canceled = True
+        
+    def cancelTask(self):
+        self._task_canceled = False
+        self._node.get_logger().info('Canceling current task.')
+        if self.result_future:
+            self.cancel_result_future = self.goal_handle.cancel_goal_async()
+            self.cancel_result_future.add_done_callback(self.get_cancel_task_callback)
+        else:
+            self._task_canceled = True
+     
+     
 
 
 class Parking(Node):
@@ -187,6 +214,17 @@ class Parking(Node):
         
         # For publishing the markers
         self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
+        
+        # for transforming between coordinate frames
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        
+        # publisher to move the arm
+        self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
+        
+        # testing
+        #thread = Thread(target=self.park_at_position, args=(-1.2, 1.7, 0.0))
+        #thread.start()
 
 
     def publish_status(self):
@@ -195,6 +233,10 @@ class Parking(Node):
         msg.job_id = self.id_of_current_job
         self.publisher_.publish(msg)
         
+    def publish_arm_command(self):
+        msg = String_msg()
+        msg.data = 'manual:[0.,0.3,1.3,1.2]'
+        self.arm_publisher.publish(msg)
         
     def process_incoming_job(self, msg):
         if self.id_of_current_job == msg.job_id or self.currently_executing_job == True:
@@ -208,30 +250,62 @@ class Parking(Node):
         thread.start()
         
     def park_at_position(self, position_x, position_y, position_z):
+    
+        # moving the arm to the correct position
+        self.publish_arm_command()
 
         # moving to parking spot
         self.get_logger().info('parking at (x: %f  y: %f)' % (position_x, position_y))
         self.rc.move_to_position(position_x, position_y, 0.0)
+        
         while not self.rc._arrived:
-                time.sleep(1)
+                time.sleep(0.2)
                 self.get_logger().info('waiting until robot arrives at parking location')
                 # Publish a marker
                 self.send_marker(position_x, position_y)
                 self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_nav_goal")
                 
+                if self.is_close_enough_for_parking(position_x, position_y):
+                    self.cancel_task()
                 
         # parking user infos
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
         # just testing the robots movement commands
-        self.rotate(3.14) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
-        self.move_forward(.1) # move 0.1 meters
+        #self.rotate(3.14) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
+        #self.move_forward(.1) # move 0.1 meters
         
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
         self.publish_status()
+        
+        
+    def is_close_enough_for_parking(self, target_x, target_y, close_enough_distance = 0.8):
+        x1 = target_x
+        y1 = target_y
+        
+        # getting the robot map position in a way to complicated way
+        robot_map_position = None
+        while robot_map_position is None:
+            robot_map_position = self.transform_from_robot_to_map_frame(0.0, 0.0, 0.0)
+            if robot_map_position is None:
+                self.get_logger().info('failed to get robot map position. trying again')
+                time.sleep(1)
+        
+        x2 = robot_map_position [0]
+        y2 = robot_map_position [1]
+        
+        dx = x1 - x2
+        dy = y1 - y2
+        dist_squared = dx * dx + dy * dy
+        close_enough_distance_squared = close_enough_distance * close_enough_distance
+        
+        if (dist_squared < close_enough_distance_squared):
+            return True
+        return False
+        
         
     def move_forward(self, distanceInMeters):
         self.rc.drive_forward(distanceInMeters)
@@ -244,6 +318,12 @@ class Parking(Node):
         while not self.rc._rotation_complete:
                 time.sleep(1)
                 self.get_logger().info('rotating')
+                
+    def cancel_task(self):
+        self.rc.cancelTask()
+        while not self.rc._task_canceled:
+                time.sleep(1)
+                self.get_logger().info('waiting for task to be canceled')
 
     def send_marker(self, x, y, marker_id = 0, scale = 0.1, text = ""):
         point_in_map_frame = PointStamped()
@@ -291,6 +371,29 @@ class Parking(Node):
         marker.pose.position.z = point_stamped.point.z
 
         return marker
+        
+    def transform_from_robot_to_map_frame(self, robot_frame_x, robot_frame_y, robot_frame_z):
+        
+        point_in_robot_frame = PointStamped()
+        point_in_robot_frame.header.frame_id = "/base_link"
+        point_in_robot_frame.header.stamp = self.get_clock().now().to_msg()
+        point_in_robot_frame.point.x = robot_frame_x
+        point_in_robot_frame.point.y = robot_frame_y
+        point_in_robot_frame.point.z = robot_frame_z
+        
+        time_now = rclpy.time.Time()
+        timeout = rclpy.duration.Duration(seconds=0.1)
+
+        try:
+            trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
+            point_in_map_frame = tfg.do_transform_point(point_in_robot_frame, trans)
+            map_frame_x = point_in_map_frame.point.x
+            map_frame_y = point_in_map_frame.point.y
+            map_frame_z = point_in_map_frame.point.z
+            return [map_frame_x, map_frame_y, map_frame_z]
+        except TransformException as te:
+            self.get_logger().info(f"Cound not get the transform: {te}")
+            return None
         
         
     def destroyNode(self):
