@@ -18,6 +18,9 @@ ros2 run dis_tutorial3 detect_people.py
 ros2 run dis_tutorial7 arm_mover_actions.py
 ros2 topic pub --once /arm_command std_msgs/msg/String "{data: 'manual:[0.,0.3,1.3,1.2]'}"
 
+// parking ring detection:
+ros2 run dis_tutorial6 parking_rings_detection.py
+
 // install libs for talking
 pip install pyttsx3
 pip install librosa

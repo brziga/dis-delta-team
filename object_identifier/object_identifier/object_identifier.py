@@ -116,11 +116,10 @@ class LevelObjectIdentifier(Node):
         point_in_robot_frame.point.y = robot_frame_y
         point_in_robot_frame.point.z = robot_frame_z
         
-        time_now = rclpy.time.Time()
         timeout = rclpy.duration.Duration(seconds=0.1)
 
         try:
-            trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
+            trans = self.tf_buffer.lookup_transform("map", "base_link", header_stamp, timeout)
             point_in_map_frame = tfg.do_transform_point(point_in_robot_frame, trans)
             map_frame_x = point_in_map_frame.point.x
             map_frame_y = point_in_map_frame.point.y
