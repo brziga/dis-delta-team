@@ -4,7 +4,12 @@ import rclpy
 from rclpy.node import Node
 import cv2
 import numpy as np
-import tf2_ros
+from tf2_ros.buffer import Buffer
+from tf2_ros import TransformException
+from tf2_ros.transform_listener import TransformListener
+from rclpy.duration import Duration
+from geometry_msgs.msg import PointStamped
+import tf2_geometry_msgs as tfg
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PointStamped, Vector3, Pose
@@ -62,13 +67,13 @@ class RingDetector(Node):
         self.marker_pub = self.create_publisher(Marker, "/parking", QoSReliabilityPolicy.BEST_EFFORT)
 
         # Object we use for transforming between coordinate frames
-        # self.tf_buf = tf2_ros.Buffer()
-        # self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        cv2.namedWindow("Binary Image", cv2.WINDOW_NORMAL)
+        #cv2.namedWindow("Binary Image", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected contours", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected rings", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)    
+        #cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)    
 
         self.parkings = []    
 
@@ -100,7 +105,7 @@ class RingDetector(Node):
         #ret, thresh = cv2.threshold(img, 50, 255, 0)
         #ret, thresh = cv2.threshold(img, 70, 255, cv2.THRESH_BINARY)
         thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 30)
-        cv2.imshow("Binary Image", thresh)
+        #cv2.imshow("Binary Image", thresh)
         cv2.waitKey(1)
 
         # Extract contours
@@ -215,7 +220,7 @@ class RingDetector(Node):
 
         image_viz = np.array(image_1, dtype= np.uint8)
 
-        cv2.imshow("Depth window", image_viz)
+        #cv2.imshow("Depth window", image_viz)
         cv2.waitKey(1)
 
 
@@ -231,17 +236,48 @@ class RingDetector(Node):
             for x,y in self.parkings:
 
                 # get 3-channel representation of the poitn cloud in numpy format
-                a = pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
-                a = a.reshape((height,width,3))
+                point_cloud = pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
+                point_cloud = point_cloud.reshape((height,width,3))
 
                 # read center coordinates
-                d = a[y,x,:]
+                point = point_cloud[y,x,:]
+
+                time_now = rclpy.time.Time()
+
+                point_in_arm_camera_frame = PointStamped()
+                point_in_arm_camera_frame.header.frame_id = "/top_camera_link"
+                point_in_arm_camera_frame.header.stamp = time_now.to_msg()
+                point_in_arm_camera_frame.point.x = float(point[0])
+                point_in_arm_camera_frame.point.y = float(point[1])
+                point_in_arm_camera_frame.point.z = float(point[2])
+            
+                
+                timeout = rclpy.duration.Duration(seconds=0.1)
+
+                try:
+                    trans_camera_to_base = self.tf_buffer.lookup_transform("base_link", "top_camera_link", time_now, timeout)
+                    point_in_base_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans_camera_to_base)
+                except TransformException as te:
+                    self.get_logger().info(f"Cound not get the transform from camera to base: {te}")
+                    return
+                
+
+                try:
+                    trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
+                    point_in_map_frame = tfg.do_transform_point(point_in_base_frame, trans)
+                    map_frame_x = point_in_map_frame.point.x
+                    map_frame_y = point_in_map_frame.point.y
+                    map_frame_z = point_in_map_frame.point.z
+                    rotation = trans.transform.rotation
+                except TransformException as te:
+                    self.get_logger().info(f"Cound not get the transform from base to map: {te}")
+                    return
 
                 # create marker
                 marker = Marker()
 
-                marker.header.frame_id = "/base_link"
-                marker.header.stamp = data.header.stamp
+                marker.header.frame_id = "/map"
+                marker.header.stamp = self.get_clock().now().to_msg()
 
                 marker.type = Marker.SPHERE
                 marker.id = 0
@@ -259,10 +295,11 @@ class RingDetector(Node):
                 marker.color.a = 1.0
 
                 # Set the pose of the marker
-                marker.pose.position.x = float(d[0])
-                marker.pose.position.y = float(d[1])
-                marker.pose.position.z = float(d[2])
+                marker.pose.position.x = float(map_frame_x)
+                marker.pose.position.y = float(map_frame_y)
+                marker.pose.position.z = float(map_frame_z)
 
+                marker.pose.orientation = rotation
                 self.marker_pub.publish(marker)
 
 def main():
