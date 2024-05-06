@@ -11,6 +11,7 @@
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <cmath>
 
 #include "geometry_msgs/msg/point_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -29,7 +30,8 @@ std::shared_ptr<rclcpp::Node> node;
 std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
 std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
-typedef pcl::PointXYZ PointT;
+//typedef pcl::PointXYZ PointT;
+typedef pcl::PointXYZRGB PointT;
 
 int marker_id = 0;
 float error_margin = 0.02;  // 2 cm margin for error
@@ -94,8 +96,8 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     seg.setModelType(pcl::SACMODEL_NORMAL_PLANE);
     seg.setNormalDistanceWeight(0.1);
     seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setMaxIterations(100);
-    seg.setDistanceThreshold(0.03);
+    seg.setMaxIterations(80);
+    seg.setDistanceThreshold(0.07);
     seg.setInputCloud(cloud_filtered);
     seg.setInputNormals(cloud_normals);
 
@@ -124,9 +126,9 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     seg.setModelType(pcl::SACMODEL_CYLINDER);
     seg.setMethodType(pcl::SAC_RANSAC);
     seg.setNormalDistanceWeight(0.1);
-    seg.setMaxIterations(100);
-    seg.setDistanceThreshold(0.05);
-    seg.setRadiusLimits(0.06, 0.2);
+    seg.setMaxIterations(10000);
+    seg.setDistanceThreshold(0.005);
+    seg.setRadiusLimits(0.1, 0.15);
     seg.setInputCloud(cloud_filtered2);
     seg.setInputNormals(cloud_normals2);
 
@@ -154,8 +156,41 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     extract.setIndices(inliers_cylinder);
     extract.setNegative(false);
     pcl::PointCloud<PointT>::Ptr cloud_cylinder(new pcl::PointCloud<PointT>());
+    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_cylinder(new pcl::PointCloud<pcl::PointXYZRGB>());
     extract.filter(*cloud_cylinder);
+    
+    
+    int sumR = 0, sumG = 0, sumB = 0;
+    int numPoints = 0;
+    for (const auto& point : *cloud_cylinder) {
+    	sumR += static_cast<int>(point.r);
+        sumG += static_cast<int>(point.g);
+        sumB += static_cast<int>(point.b);
+        numPoints++;
+    }
 
+    double avgR = static_cast<double>(sumR) / numPoints;
+    double avgG = static_cast<double>(sumG) / numPoints;
+    double avgB = static_cast<double>(sumB) / numPoints;
+    
+    std::cout << "Average Red: " << avgR << ", Average Green: " << avgG << ", Average Blue: " << avgB << std::endl;
+    std::cout << "Cloud Size: " << numPoints << std::endl;
+    double absdiff = std::abs(avgR-avgG)+std::abs(avgR-avgB)+std::abs(avgB-avgG);
+    std::cout << "Absolute diff: " << absdiff << std::endl;
+
+    if (absdiff > 60) {
+        if (numPoints < 2500) {
+            return;
+        }
+    }
+    if (numPoints < 3200) {
+        if (absdiff < 60) {
+            return;
+        }
+    }    
+    
+
+    
     // calculate marker
     pcl::compute3DCentroid(*cloud_cylinder, centroid);
     if (verbose) {
@@ -189,6 +224,10 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
         std::cerr << "point_map: " << point_map.point.x << " " << point_map.point.y << " " << point_map.point.z << std::endl;
     }
 
+    if (point_map.point.z > 0.26 || point_map.point.z < 0.2) {
+        return;
+    }
+
     // publish marker
     marker.header.frame_id = "map";
     marker.header.stamp = now;
@@ -212,9 +251,9 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     marker.scale.y = 0.1;
     marker.scale.z = 0.1;
 
-    marker.color.r = 0.0f;
-    marker.color.g = 1.0f;
-    marker.color.b = 0.0f;
+    marker.color.r = avgR;
+    marker.color.g = avgG;
+    marker.color.b = avgB;
     marker.color.a = 1.0f;
 
     // marker.lifetime = rclcpp::Duration(1,0);
