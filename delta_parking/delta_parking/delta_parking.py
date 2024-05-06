@@ -253,6 +253,17 @@ class Parking(Node):
     
         # moving the arm to the correct position
         self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        self.publish_arm_command()
+        
+        # waiting for transforms to be availaible
+        self.rc._arrived()
 
         # moving to parking spot
         self.get_logger().info('parking at (x: %f  y: %f)' % (position_x, position_y))
