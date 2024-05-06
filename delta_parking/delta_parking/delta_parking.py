@@ -235,7 +235,7 @@ class Parking(Node):
         
     def publish_arm_command(self):
         msg = String_msg()
-        msg.data = 'manual:[0.,0.3,1.3,1.2]'
+        msg.data = 'manual:[0.,0.6,1.3,1.2]'
         self.arm_publisher.publish(msg)
         
     def process_incoming_job(self, msg):
@@ -254,6 +254,7 @@ class Parking(Node):
     
         # moving the arm to the correct position
         self.publish_arm_command()
+        return
         
         # waiting for transforms to be availaible
         self.is_close_enough_for_parking(position_x, position_y)
