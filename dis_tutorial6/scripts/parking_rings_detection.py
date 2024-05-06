@@ -277,7 +277,7 @@ class RingDetector(Node):
                 # create marker
                 marker = Marker()
 
-                marker.header.frame_id = "/top_camera_link" #"/map"
+                marker.header.frame_id = "/map"
                 marker.header.stamp = self.get_clock().now().to_msg()
 
                 marker.type = Marker.SPHERE
@@ -300,7 +300,7 @@ class RingDetector(Node):
                 marker.pose.position.y = float(point[1]) #float(map_frame_y)
                 marker.pose.position.z = float(point[2]) #float(map_frame_z)
 
-                marker.pose.orientation = 0.0 #rotation
+                #marker.pose.orientation = rotation
                 self.marker_pub.publish(marker)
 
 def main():
