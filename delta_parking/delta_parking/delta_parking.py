@@ -308,13 +308,14 @@ class Parking(Node):
         
         self.parking_goal_x = position_x
         self.parking_goal_y = position_y
-        self.currently_parking = True
     
         # moving the arm to the correct position
         self.publish_arm_command()
         
         # waiting for transforms to be availaible
         self.is_close_enough_for_parking(position_x, position_y)
+        
+        self.currently_parking = True
 
         # moving to parking spot
         self.get_logger().info('parking at (x: %f  y: %f)' % (position_x, position_y))
@@ -380,8 +381,6 @@ class Parking(Node):
         
         #x = -0.95
         #y = 1.55
-        
-        return
         
         if not self.currently_parking:
             return
