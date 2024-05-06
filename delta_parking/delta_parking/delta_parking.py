@@ -23,6 +23,9 @@ from nav2_msgs.action import Spin, NavigateToPose, DriveOnHeading
 from turtle_tf2_py.turtle_tf2_broadcaster import quaternion_from_euler
 from rclpy.action import ActionClient
 
+# for receiving marker from parking ring detection
+from visualization_msgs.msg import Marker
+
 # publishing markers
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PointStamped, Point
@@ -232,9 +235,13 @@ class Parking(Node):
         # publisher to move the arm
         self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
         
+        # subscriber to receive the markers from parking_rings_detection
+        self.marker_subscription = self.create_subscription(Marker, "/parking", self.receive_marker, 1)
+        self.marker_subscription  # prevent unused variable warning
+        
         # testing
-        thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
-        thread.start()
+        #thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
+        #thread.start()
         
     def get_angle_to_detected_ring(self):
         if not self.spotted_ring:
@@ -313,10 +320,7 @@ class Parking(Node):
         self.get_logger().info('parking at (x: %f  y: %f)' % (position_x, position_y))
         self.rc.move_to_position(position_x, position_y, 0.0)
         
-        while not self.rc._arrived:
-                #testing:
-                self.receive_marker()
-                
+        while not self.rc._arrived:               
                 self.publish_arm_command()
                 self.get_logger().info('waiting until robot arrives at parking location')
                 # Publish a marker
@@ -360,9 +364,23 @@ class Parking(Node):
         distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
         self.move_forward(distance * factor)
         
-    def receive_marker(self):
-        x = -0.95
-        y = 1.55
+    def receive_marker(self, msg):
+        robot_frame_x = msg.pose.position.x
+        robot_frame_y = msg.pose.position.y
+        map_position = self.transform_from_robot_to_map_frame_safe(robot_frame_x, robot_frame_y)
+        
+        x = map_position[0]
+        y = map_position[1]
+        self.get_logger().info("")
+        self.get_logger().info('received marker:')
+        self.get_logger().info('marker x:')
+        self.get_logger().info(str(x))
+        self.get_logger().info('marker y:')
+        self.get_logger().info(str(y))
+        self.get_logger().info("")
+        
+        #x = -0.95
+        #y = 1.55
         
         if not self.currently_parking:
             return
