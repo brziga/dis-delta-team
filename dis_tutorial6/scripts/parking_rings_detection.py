@@ -242,7 +242,7 @@ class RingDetector(Node):
                 # read center coordinates
                 point = point_cloud[min(y,239),x,:]
 
-                time_now = rclpy.time.Time()
+                time_now = data.header.stamp #rclpy.time.Time()
 
                 point_in_arm_camera_frame = PointStamped()
                 point_in_arm_camera_frame.header.frame_id = "/top_camera_link"
