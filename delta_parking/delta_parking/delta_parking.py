@@ -332,9 +332,16 @@ class Parking(Node):
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
-        # just testing the robots movement commands
         self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
-        #self.move_forward(.1) # move 0.1 meters
+        
+        
+        # calculating remaining distance
+        robot_map_position = self.get_robot_world_position()
+        vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
+        vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
+        distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
+        
+        self.move_forward(distance)
         
         
         self.currently_parking = False
