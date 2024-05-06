@@ -223,8 +223,8 @@ class Parking(Node):
         self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
         
         # testing
-        #thread = Thread(target=self.park_at_position, args=(-1.2, 1.7, 0.0))
-        #thread.start()
+        thread = Thread(target=self.park_at_position, args=(-1.2, 1.7, 0.0))
+        thread.start()
 
 
     def publish_status(self):
