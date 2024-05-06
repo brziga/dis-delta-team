@@ -336,12 +336,8 @@ class Parking(Node):
         
         
         for i in range(5):
-            # calculating remaining distance
-            robot_map_position = self.get_robot_world_position()
-            vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
-            vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
-            distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
-            self.move_forward(distance * 0.8)
+            self.approach_final_parking_spot(self, 0.5)
+        approach_final_parking_spot(self, 1.0)
         
         
         self.currently_parking = False
@@ -349,6 +345,13 @@ class Parking(Node):
         self.currently_executing_job = False
         self.publish_status()
         
+    def approach_final_parking_spot(self, factor):
+        # calculating remaining distance
+        robot_map_position = self.get_robot_world_position()
+        vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
+        vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
+        distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
+        self.move_forward(distance * factor)
         
     def receive_marker(self):
         x = -0.95
