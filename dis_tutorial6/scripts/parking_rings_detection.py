@@ -240,7 +240,7 @@ class RingDetector(Node):
                 point_cloud = point_cloud.reshape((height,width,3))
 
                 # read center coordinates
-                point = point_cloud[y,x,:]
+                point = point_cloud[min(y,239),x,:]
 
                 time_now = rclpy.time.Time()
 
@@ -254,24 +254,24 @@ class RingDetector(Node):
                 
                 timeout = rclpy.duration.Duration(seconds=0.1)
 
-                try:
-                    trans_camera_to_base = self.tf_buffer.lookup_transform("base_link", "top_camera_link", time_now, timeout)
-                    point_in_base_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans_camera_to_base)
-                except TransformException as te:
-                    self.get_logger().info(f"Cound not get the transform from camera to base: {te}")
-                    return
+                #try:
+                #    trans_camera_to_base = self.tf_buffer.lookup_transform("base_link", "top_camera_link", time_now, timeout)
+                #    point_in_base_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans_camera_to_base)
+                #except TransformException as te:
+                #    self.get_logger().info(f"Cound not get the transform from camera to base: {te}")
+                #    return
                 
 
-                try:
-                    trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
-                    point_in_map_frame = tfg.do_transform_point(point_in_base_frame, trans)
-                    map_frame_x = point_in_map_frame.point.x
-                    map_frame_y = point_in_map_frame.point.y
-                    map_frame_z = point_in_map_frame.point.z
-                    rotation = trans.transform.rotation
-                except TransformException as te:
-                    self.get_logger().info(f"Cound not get the transform from base to map: {te}")
-                    return
+                #try:
+                #    trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
+                #    point_in_map_frame = tfg.do_transform_point(point_in_base_frame, trans)
+                #    map_frame_x = point_in_map_frame.point.x
+                #    map_frame_y = point_in_map_frame.point.y
+                #    map_frame_z = point_in_map_frame.point.z
+                #    rotation = trans.transform.rotation
+                #except TransformException as te:
+                #    self.get_logger().info(f"Cound not get the transform from base to map: {te}")
+                #    return
 
                 # create marker
                 marker = Marker()
