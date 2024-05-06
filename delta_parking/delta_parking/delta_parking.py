@@ -231,12 +231,6 @@ class Parking(Node):
         # publisher to move the arm
         self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
         
-        # testing
-        while True:
-            self.get_logger().info('angle:')
-            angle = self.get_angle_to_detected_ring()
-            self.get_logger().info(str(angle))
-        return
         thread = Thread(target=self.park_at_position, args=(-1.1, 1.7, 0.0))
         thread.start()
         
@@ -294,6 +288,14 @@ class Parking(Node):
         thread.start()
         
     def park_at_position(self, position_x, position_y, position_z):
+        # testing
+        while True:
+            self.get_logger().info('angle:')
+            angle = self.get_angle_to_detected_ring()
+            self.get_logger().info(str(angle))
+            
+        return
+        
         time.sleep(1)
         
         self.parking_goal_x = position_x
