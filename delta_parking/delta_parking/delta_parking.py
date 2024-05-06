@@ -237,8 +237,8 @@ class Parking(Node):
         thread.start()
         
     def get_angle_to_detected_ring(self):
-        #if not self.spotted_ring:
-        #    return None
+        if not self.spotted_ring:
+            return None
             
         robot_map_position = self.get_robot_world_position()
         robot_forward = self.transform_from_robot_to_map_frame_safe(1.0, 0.0)
@@ -261,7 +261,7 @@ class Parking(Node):
         dist1_squared = p1_ring_x * p1_ring_x + p1_ring_y * p1_ring_y
         dist2_squared = p2_ring_x * p2_ring_x + p2_ring_y * p2_ring_y
         
-        if dist1_squared > dist2_squared:
+        if dist1_squared < dist2_squared:
             angle = -1.0 * angle
         
         return angle
@@ -315,6 +315,9 @@ class Parking(Node):
         self.rc.move_to_position(position_x, position_y, 0.0)
         
         while not self.rc._arrived:
+                #testing:
+                self.receive_marker()
+                
                 self.publish_arm_command()
                 self.get_logger().info('waiting until robot arrives at parking location')
                 # Publish a marker
@@ -331,7 +334,7 @@ class Parking(Node):
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
         # just testing the robots movement commands
-        #self.rotate(3.14) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
+        self.rotate(self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
         #self.move_forward(.1) # move 0.1 meters
         
         
