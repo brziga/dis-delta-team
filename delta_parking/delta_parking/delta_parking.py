@@ -333,7 +333,7 @@ class Parking(Node):
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
         # just testing the robots movement commands
-        self.rotate(self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
+        self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
         #self.move_forward(.1) # move 0.1 meters
         
         
