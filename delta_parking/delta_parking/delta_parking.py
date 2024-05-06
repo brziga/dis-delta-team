@@ -381,6 +381,8 @@ class Parking(Node):
         #x = -0.95
         #y = 1.55
         
+        return
+        
         if not self.currently_parking:
             return
         if not self.is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y, 1.0):
