@@ -332,6 +332,9 @@ class Parking(Node):
                     
                 time.sleep(0.2)
                 
+        self.rotate(1.0)
+        self.rotate(-2.0)
+                
         # parking user infos
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
