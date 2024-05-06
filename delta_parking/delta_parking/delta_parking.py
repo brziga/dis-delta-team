@@ -336,8 +336,8 @@ class Parking(Node):
         
         
         for i in range(5):
-            self.approach_final_parking_spot(self, 0.5)
-        approach_final_parking_spot(self, 1.0)
+            self.approach_final_parking_spot(0.5)
+        approach_final_parking_spot(1.0)
         
         
         self.currently_parking = False
