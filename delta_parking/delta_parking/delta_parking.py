@@ -364,13 +364,11 @@ class Parking(Node):
         distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
         self.move_forward(distance * factor)
         
-    def receive_marker(self, msg):
-        robot_frame_x = msg.pose.position.x
-        robot_frame_y = msg.pose.position.y
-        map_position = self.transform_from_robot_to_map_frame_safe(robot_frame_x, robot_frame_y)
+    def receive_marker(self, msg):       
+        # already in map frame
+        x = msg.pose.position.x
+        y = msg.pose.position.y
         
-        x = map_position[0]
-        y = map_position[1]
         self.get_logger().info("")
         self.get_logger().info('received marker:')
         self.get_logger().info('marker x:')
