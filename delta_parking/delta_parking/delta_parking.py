@@ -291,12 +291,11 @@ class Parking(Node):
         
     def park_at_position(self, position_x, position_y, position_z):
         # testing
-        while True:
-            self.get_logger().info('angle:')
-            angle = self.get_angle_to_detected_ring()
-            self.get_logger().info(str(angle))
-            
-        return
+        #while True:
+        #    self.get_logger().info('angle:')
+        #    angle = self.get_angle_to_detected_ring()
+        #    self.get_logger().info(str(angle))   
+        #return
         
         time.sleep(1)
         
