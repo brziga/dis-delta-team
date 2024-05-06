@@ -232,6 +232,7 @@ class Parking(Node):
         # publisher to move the arm
         self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
         
+        # testing
         thread = Thread(target=self.park_at_position, args=(-1.1, 1.7, 0.0))
         thread.start()
         
@@ -241,12 +242,12 @@ class Parking(Node):
             
         robot_map_position = self.get_robot_world_position()
         robot_forward = self.transform_from_robot_to_map_frame_safe(1.0, 0.0)
-        vector_robot_forward_x = robot_forward[0]
-        vector_robot_forward_y = robot_forward[1]
+        vector_robot_forward_x = robot_forward[0] - robot_map_position[0]
+        vector_robot_forward_y = robot_forward[1] - robot_map_position[1]
         vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
         vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
         
-        angle = self.angle(vector_robot_forward_x, vector_robot_forward_y, vector_robot_ring_x, vector_robot_ring_y)
+        angle = self.angle_between(vector_robot_forward_x, vector_robot_forward_y, vector_robot_ring_x, vector_robot_ring_y)
         
         # finding out if angle is positive or negative
         p1 = self.transform_from_robot_to_map_frame_safe(0.0, 1.0)
@@ -396,19 +397,6 @@ class Parking(Node):
         v1_u = self.unit_vector(v1)
         v2_u = self.unit_vector(v2)
         return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-        
-        
-        
-    def dotproduct(self, v1, v2):
-        return sum((a*b) for a, b in zip(v1, v2))
-
-    def length(self, v):
-        return math.sqrt(self.dotproduct(v, v))
-
-    def angle(self, x1, y1, x2, y2):
-        v1 = (x1, y1)
-        v2 = (x2, y2)
-        return math.acos(self.dotproduct(v1, v2) / (self.length(v1) * self.length(v2)))
         
         
     def move_forward(self, distanceInMeters):
