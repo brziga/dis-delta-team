@@ -233,7 +233,7 @@ class Parking(Node):
         self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
         
         # testing
-        thread = Thread(target=self.park_at_position, args=(-1.0, 1.6, 0.0))
+        thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
         thread.start()
         
     def get_angle_to_detected_ring(self):
@@ -351,8 +351,8 @@ class Parking(Node):
         
         
     def receive_marker(self):
-        x = -1.0
-        y = 1.6
+        x = -0.95
+        y = 1.55
         
         if not self.currently_parking:
             return
