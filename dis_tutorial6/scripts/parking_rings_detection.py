@@ -254,7 +254,26 @@ class RingDetector(Node):
                 
                 
                 timeout = rclpy.duration.Duration(seconds=0.1)
+                
+                
+                #point_in_robot_frame = PointStamped()
+                #point_in_robot_frame.header.frame_id = "/top_camera_link"
+                #point_in_robot_frame.header.stamp = header_stamp
+                #point_in_robot_frame.point.x = robot_frame_x
+                #point_in_robot_frame.point.y = robot_frame_y
+                #point_in_robot_frame.point.z = robot_frame_z
 
+                try:
+                    trans = self.tf_buffer.lookup_transform("map", "top_camera_link", time_now, timeout)
+                    point_in_map_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans)
+                    map_frame_x = point_in_map_frame.point.x
+                    map_frame_y = point_in_map_frame.point.y
+                    map_frame_z = point_in_map_frame.point.z
+                except TransformException as te:
+                    self.get_logger().info(f"Cound not get the transform: {te}")
+                    return
+
+"""
                 try:
                     trans_camera_to_base = self.tf_buffer.lookup_transform("base_link", "top_camera_link", time_now, timeout)
                     point_in_base_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans_camera_to_base)
@@ -272,7 +291,7 @@ class RingDetector(Node):
                     rotation = trans.transform.rotation
                 except TransformException as te:
                     self.get_logger().info(f"Cound not get the transform from base to map: {te}")
-                    return
+                    return"""
 
                 # create marker
                 marker = Marker()
