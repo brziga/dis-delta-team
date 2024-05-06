@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'object_identifier = object_identifier.object_identifier:main'
+            'object_identifier = object_identifier.object_identifier:main',
+            'cylinder_identifier = object_identifier.cylinder_identifier:main'
         ],
     },
 )
