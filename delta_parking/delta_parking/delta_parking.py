@@ -253,14 +253,6 @@ class Parking(Node):
     
         # moving the arm to the correct position
         self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
-        self.publish_arm_command()
         
         # waiting for transforms to be availaible
         self.is_close_enough_for_parking(position_x, position_y)
@@ -270,7 +262,7 @@ class Parking(Node):
         self.rc.move_to_position(position_x, position_y, 0.0)
         
         while not self.rc._arrived:
-                time.sleep(0.2)
+                self.publish_arm_command()
                 self.get_logger().info('waiting until robot arrives at parking location')
                 # Publish a marker
                 self.send_marker(position_x, position_y)
@@ -278,6 +270,8 @@ class Parking(Node):
                 
                 if self.is_close_enough_for_parking(position_x, position_y):
                     self.cancel_task()
+                    
+                time.sleep(0.2)
                 
         # parking user infos
         self.get_logger().info('arrived at parking spot. beginning with parking')        
