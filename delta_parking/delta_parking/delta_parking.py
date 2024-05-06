@@ -240,8 +240,8 @@ class Parking(Node):
         self.marker_subscription  # prevent unused variable warning
         
         # testing
-        #thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
-        #thread.start()
+        thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
+        thread.start()
         
     def get_angle_to_detected_ring(self):
         if not self.spotted_ring:
@@ -345,13 +345,10 @@ class Parking(Node):
         self.approach_final_parking_spot(0.3)
         self.rotate(-self.get_angle_to_detected_ring())
         self.approach_final_parking_spot(0.2)
-        #self.rotate(-self.get_angle_to_detected_ring())
-        #self.approach_final_parking_spot(0.1)
-        #self.rotate(-self.get_angle_to_detected_ring())
-        #self.approach_final_parking_spot(0.1)
         
         
         self.currently_parking = False
+        self.spotted_ring = False
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
         self.publish_status()
