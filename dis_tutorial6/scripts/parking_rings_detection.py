@@ -240,7 +240,8 @@ class RingDetector(Node):
                 point_cloud = point_cloud.reshape((height,width,3))
 
                 # read center coordinates
-                point = point_cloud[min(y,239),x,:]
+                point = point_cloud[x,y,:]
+                #point = point_cloud[min(y,239),x,:]
 
                 time_now = rclpy.time.Time()
 
