@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 import time
+import numpy as np
 
 from delta_interfaces.msg import ParkingJob
 from delta_interfaces.msg import JobStatus
@@ -196,6 +197,14 @@ class Parking(Node):
     def __init__(self):
         super().__init__('parking')
         
+        # parking job variables
+        self.currently_parking = False
+        self.parking_goal_x = 0.0
+        self.parking_goal_y = 0.0
+        self.spotted_ring = False
+        self.spotted_ring_x = 0.0
+        self.spotted_ring_y = 0.0
+        
         # information about the currently executed job
         self.currently_executing_job = False # is the job still beeing processed
         self.id_of_current_job = ""
@@ -223,8 +232,43 @@ class Parking(Node):
         self.arm_publisher = self.create_publisher(String_msg, '/arm_command', 1)
         
         # testing
+        while True:
+            self.get_logger().info('angle:')
+            angle = self.get_angle_to_detected_ring()
+            self.get_logger().info(str(angle))
+        return
         thread = Thread(target=self.park_at_position, args=(-1.1, 1.7, 0.0))
         thread.start()
+        
+    def get_angle_to_detected_ring(self):
+        #if not self.spotted_ring:
+        #    return None
+            
+        robot_map_position = get_robot_world_position()
+        robot_forward = transform_from_robot_to_map_frame_safe(1.0, 0.0)
+        vector_robot_forward_x = robot_forward[0]
+        vector_robot_forward_y = robot_forward[1]
+        vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
+        vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
+        
+        angle = self.angle_between(vector_robot_forward_x, vector_robot_forward_y, vector_robot_ring_x, vector_robot_ring_y)
+        
+        # finding out if angle is positive or negative
+        p1 = transform_from_robot_to_map_frame_safe(0.0, 1.0)
+        p2 = transform_from_robot_to_map_frame_safe(0.0, -1.0)
+        
+        p1_ring_x = self.spotted_ring_x - p1[0]
+        p1_ring_y = self.spotted_ring_y - p1[1]
+        p2_ring_x = self.spotted_ring_x - p2[0]
+        p2_ring_y = self.spotted_ring_y - p2[1]
+        
+        dist1_squared = p1_ring_x * p1_ring_x + p1_ring_y * p1_ring_y
+        dist2_squared = p2_ring_x * p2_ring_x + p2_ring_y * p2_ring_y
+        
+        if dist1_squared > dist2_squared:
+            angle = -1.0 * angle
+        
+        return angle
 
 
     def publish_status(self):
@@ -251,6 +295,10 @@ class Parking(Node):
         
     def park_at_position(self, position_x, position_y, position_z):
         time.sleep(1)
+        
+        self.parking_goal_x = position_x
+        self.parking_goal_y = position_y
+        self.currently_parking = True
     
         # moving the arm to the correct position
         self.publish_arm_command()
@@ -269,7 +317,7 @@ class Parking(Node):
                 self.send_marker(position_x, position_y)
                 self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_nav_goal")
                 
-                if self.is_close_enough_for_parking(position_x, position_y):
+                if self.is_close_enough_for_parking(position_x, position_y): # replace by self.spotted_ring when receiving markers works + increase close enough distance
                     self.cancel_task()
                     
                 time.sleep(0.2)
@@ -283,9 +331,24 @@ class Parking(Node):
         #self.move_forward(.1) # move 0.1 meters
         
         
+        self.currently_parking = False
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
         self.publish_status()
+        
+        
+    def receive_marker():
+        x = -1.1
+        y = 1.7
+        
+        if not self.currently_parking:
+            return
+        if not is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y):
+            return
+        
+        self.spotted_ring = True
+        self.spotted_ring_x = x
+        self.spotted_ring_y = y
         
         
     def is_close_enough_for_parking(self, target_x, target_y, close_enough_distance = 0.4):
@@ -293,12 +356,7 @@ class Parking(Node):
         y1 = target_y
         
         # getting the robot map position in a way to complicated way
-        robot_map_position = None
-        while robot_map_position is None:
-            robot_map_position = self.transform_from_robot_to_map_frame(0.0, 0.0, 0.0)
-            if robot_map_position is None:
-                self.get_logger().info('failed to get robot map position. trying again')
-                time.sleep(1)
+        robot_map_position = get_robot_world_position()
         
         x2 = robot_map_position [0]
         y2 = robot_map_position [1]
@@ -311,6 +369,30 @@ class Parking(Node):
         if (dist_squared < close_enough_distance_squared):
             return True
         return False
+        
+    def transform_from_robot_to_map_frame_safe(self, x, y):
+        robot_map_position = None
+        while robot_map_position is None:
+            robot_map_position = self.transform_from_robot_to_map_frame(x, y, 0.0)
+            if robot_map_position is None:
+                self.get_logger().info('failed to get robot map position. trying again')
+                time.sleep(1)
+        return robot_map_position
+        
+    def get_robot_world_position(self):
+        robot_map_position = transform_from_robot_to_map_frame_safe(0.0, 0.0)
+        return robot_map_position
+        
+        
+    def unit_vector(self, vector):
+        return vector / np.linalg.norm(vector)
+
+    def angle_between(self, x1, y1, x2, y2):
+        v1 = (x1, y1)
+        v2 = (x2, y2)
+        v1_u = self.unit_vector(v1)
+        v2_u = self.unit_vector(v2)
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
         
         
     def move_forward(self, distanceInMeters):
