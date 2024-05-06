@@ -250,6 +250,7 @@ class Parking(Node):
         thread.start()
         
     def park_at_position(self, position_x, position_y, position_z):
+        time.sleep(1)
     
         # moving the arm to the correct position
         self.publish_arm_command()
