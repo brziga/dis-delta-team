@@ -383,8 +383,8 @@ class Parking(Node):
         
         if not self.currently_parking:
             return
-        #if not self.is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y, 2.0):
-        #    return
+        if not self.is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y, 1.0):
+            return
         
         self.spotted_ring = True
         self.spotted_ring_x = x
