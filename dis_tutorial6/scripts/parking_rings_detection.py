@@ -300,7 +300,7 @@ class RingDetector(Node):
                 marker.pose.position.y = float(point[1]) #float(map_frame_y)
                 marker.pose.position.z = float(point[2]) #float(map_frame_z)
 
-                #marker.pose.orientation = rotation
+                marker.pose.orientation = 0.0 #rotation
                 self.marker_pub.publish(marker)
 
 def main():
