@@ -369,13 +369,13 @@ class Parking(Node):
         x = msg.pose.position.x
         y = msg.pose.position.y
         
-        self.get_logger().info("")
-        self.get_logger().info('received marker:')
-        self.get_logger().info('marker x:')
-        self.get_logger().info(str(x))
-        self.get_logger().info('marker y:')
-        self.get_logger().info(str(y))
-        self.get_logger().info("")
+        #self.get_logger().info("")
+        #self.get_logger().info('received marker:')
+        #self.get_logger().info('marker x:')
+        #self.get_logger().info(str(x))
+        #self.get_logger().info('marker y:')
+        #self.get_logger().info(str(y))
+        #self.get_logger().info("")
         
         #x = -0.95
         #y = 1.55
