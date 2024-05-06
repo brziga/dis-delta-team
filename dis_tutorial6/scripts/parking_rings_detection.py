@@ -246,7 +246,7 @@ class RingDetector(Node):
 
                 point_in_arm_camera_frame = PointStamped()
                 point_in_arm_camera_frame.header.frame_id = "/top_camera_link"
-                point_in_arm_camera_frame.header.stamp = time_now.to_msg()
+                point_in_arm_camera_frame.header.stamp = time_now # time_now.to_msg()
                 point_in_arm_camera_frame.point.x = float(point[0])
                 point_in_arm_camera_frame.point.y = float(point[1])
                 point_in_arm_camera_frame.point.z = float(point[2])
