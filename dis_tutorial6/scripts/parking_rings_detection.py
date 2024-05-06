@@ -252,6 +252,7 @@ class RingDetector(Node):
                 point_in_arm_camera_frame.point.z = float(point[2])
             
                 
+                """
                 timeout = rclpy.duration.Duration(seconds=0.1)
 
                 try:
@@ -271,12 +272,12 @@ class RingDetector(Node):
                     rotation = trans.transform.rotation
                 except TransformException as te:
                     self.get_logger().info(f"Cound not get the transform from base to map: {te}")
-                    return
+                    return"""
 
                 # create marker
                 marker = Marker()
 
-                marker.header.frame_id = "/map"
+                marker.header.frame_id = "/top_camera_link" #"/map"
                 marker.header.stamp = self.get_clock().now().to_msg()
 
                 marker.type = Marker.SPHERE
@@ -295,9 +296,9 @@ class RingDetector(Node):
                 marker.color.a = 1.0
 
                 # Set the pose of the marker
-                marker.pose.position.x = float(map_frame_x)
-                marker.pose.position.y = float(map_frame_y)
-                marker.pose.position.z = float(map_frame_z)
+                marker.pose.position.x = float(point[0]) #float(map_frame_x)
+                marker.pose.position.y = float(point[1]) #float(map_frame_y)
+                marker.pose.position.z = float(point[2]) #float(map_frame_z)
 
                 marker.pose.orientation = rotation
                 self.marker_pub.publish(marker)
