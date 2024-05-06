@@ -240,8 +240,8 @@ class Parking(Node):
         self.marker_subscription  # prevent unused variable warning
         
         # testing
-        thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
-        thread.start()
+        #thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
+        #thread.start()
         
     def get_angle_to_detected_ring(self):
         if not self.spotted_ring:
