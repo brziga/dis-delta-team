@@ -340,9 +340,9 @@ class Parking(Node):
         self.rotate(-self.get_angle_to_detected_ring())
         self.approach_final_parking_spot(0.3)
         self.rotate(-self.get_angle_to_detected_ring())
-        self.approach_final_parking_spot(0.3)
+        self.approach_final_parking_spot(0.2)
         self.rotate(-self.get_angle_to_detected_ring())
-        self.approach_final_parking_spot(0.3)
+        self.approach_final_parking_spot(0.1)
         
         
         self.currently_parking = False
