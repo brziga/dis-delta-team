@@ -288,7 +288,7 @@ class Parking(Node):
         self.publish_status()
         
         
-    def is_close_enough_for_parking(self, target_x, target_y, close_enough_distance = 0.8):
+    def is_close_enough_for_parking(self, target_x, target_y, close_enough_distance = 0.5):
         x1 = target_x
         y1 = target_y
         
