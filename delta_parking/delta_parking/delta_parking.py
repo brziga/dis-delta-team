@@ -332,15 +332,14 @@ class Parking(Node):
                     
                 time.sleep(0.2)
                 
-        self.rotate(1.0)
-        self.rotate(-2.0)
                 
         # parking user infos
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
         while self.get_angle_to_detected_ring() is None:
-            self.get_logger().info('waiting until a ring marker is received') 
+            self.get_logger().info('waiting until a ring marker is received')
+            self.rotate(1.0)
             time.sleep(1.0)
         
         self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
@@ -384,7 +383,7 @@ class Parking(Node):
         
         if not self.currently_parking:
             return
-        if not self.is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y, 1.5):
+        if not self.is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y, 2.0):
             return
         
         self.spotted_ring = True
