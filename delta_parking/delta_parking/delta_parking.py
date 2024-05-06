@@ -244,8 +244,8 @@ class Parking(Node):
         #if not self.spotted_ring:
         #    return None
             
-        robot_map_position = get_robot_world_position()
-        robot_forward = transform_from_robot_to_map_frame_safe(1.0, 0.0)
+        robot_map_position = self.get_robot_world_position()
+        robot_forward = self.transform_from_robot_to_map_frame_safe(1.0, 0.0)
         vector_robot_forward_x = robot_forward[0]
         vector_robot_forward_y = robot_forward[1]
         vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
@@ -254,8 +254,8 @@ class Parking(Node):
         angle = self.angle_between(vector_robot_forward_x, vector_robot_forward_y, vector_robot_ring_x, vector_robot_ring_y)
         
         # finding out if angle is positive or negative
-        p1 = transform_from_robot_to_map_frame_safe(0.0, 1.0)
-        p2 = transform_from_robot_to_map_frame_safe(0.0, -1.0)
+        p1 = self.transform_from_robot_to_map_frame_safe(0.0, 1.0)
+        p2 = self.transform_from_robot_to_map_frame_safe(0.0, -1.0)
         
         p1_ring_x = self.spotted_ring_x - p1[0]
         p1_ring_y = self.spotted_ring_y - p1[1]
@@ -356,7 +356,7 @@ class Parking(Node):
         y1 = target_y
         
         # getting the robot map position in a way to complicated way
-        robot_map_position = get_robot_world_position()
+        robot_map_position = self.get_robot_world_position()
         
         x2 = robot_map_position [0]
         y2 = robot_map_position [1]
@@ -380,7 +380,7 @@ class Parking(Node):
         return robot_map_position
         
     def get_robot_world_position(self):
-        robot_map_position = transform_from_robot_to_map_frame_safe(0.0, 0.0)
+        robot_map_position = self.transform_from_robot_to_map_frame_safe(0.0, 0.0)
         return robot_map_position
         
         
