@@ -335,13 +335,13 @@ class Parking(Node):
         self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
         
         
-        # calculating remaining distance
-        robot_map_position = self.get_robot_world_position()
-        vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
-        vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
-        distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
-        
-        self.move_forward(distance)
+        for i in range(5):
+            # calculating remaining distance
+            robot_map_position = self.get_robot_world_position()
+            vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
+            vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
+            distance = math.sqrt(vector_robot_ring_x * vector_robot_ring_x + vector_robot_ring_y * vector_robot_ring_y)
+            self.move_forward(distance * 0.8)
         
         
         self.currently_parking = False
