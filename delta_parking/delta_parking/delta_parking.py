@@ -254,7 +254,6 @@ class Parking(Node):
     
         # moving the arm to the correct position
         self.publish_arm_command()
-        return
         
         # waiting for transforms to be availaible
         self.is_close_enough_for_parking(position_x, position_y)
