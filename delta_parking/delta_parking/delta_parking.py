@@ -343,7 +343,7 @@ class Parking(Node):
         self.publish_status()
         
         
-    def receive_marker():
+    def receive_marker(self):
         x = -1.1
         y = 1.7
         
