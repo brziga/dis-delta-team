@@ -263,7 +263,7 @@ class Parking(Node):
         self.publish_arm_command()
         
         # waiting for transforms to be availaible
-        self.rc._arrived()
+        self.is_close_enough_for_parking(position_x, position_y)
 
         # moving to parking spot
         self.get_logger().info('parking at (x: %f  y: %f)' % (position_x, position_y))
