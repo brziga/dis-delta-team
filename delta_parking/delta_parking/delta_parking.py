@@ -235,7 +235,7 @@ class Parking(Node):
         
     def publish_arm_command(self):
         msg = String_msg()
-        msg.data = 'manual:[0.,0.3,0.3,2.2]'
+        msg.data = 'manual:[0.,0.3,0.0,2.5]'
         self.arm_publisher.publish(msg)
         
     def process_incoming_job(self, msg):
