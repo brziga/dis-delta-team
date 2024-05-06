@@ -334,10 +334,9 @@ class Parking(Node):
         
         self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
         
-        
-        for i in range(5):
-            self.approach_final_parking_spot(0.5)
-        approach_final_parking_spot(1.0)
+        self.approach_final_parking_spot(0.5)
+        self.rotate(-self.get_angle_to_detected_ring())
+        self.approach_final_parking_spot(0.9)
         
         
         self.currently_parking = False
