@@ -209,6 +209,11 @@ class Parking(Node):
         self.spotted_ring_x = 0.0
         self.spotted_ring_y = 0.0
         
+        # marker colors
+        self.marker_color_r = 0.0
+        self.marker_color_g = 0.5
+        self.marker_color_b = 0.1
+        
         # information about the currently executed job
         self.currently_executing_job = False # is the job still beeing processed
         self.id_of_current_job = ""
@@ -242,6 +247,11 @@ class Parking(Node):
         # testing
         #thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
         #thread.start()
+        
+    def set_marker_colors(r, g, b):
+        self.marker_color_r = r
+        self.marker_color_g = g
+        self.marker_color_b = b
         
     def get_angle_to_detected_ring(self):
         if not self.spotted_ring:
@@ -297,13 +307,8 @@ class Parking(Node):
         thread.start()
         
     def park_at_position(self, position_x, position_y, position_z):
-        # testing
-        #while True:
-        #    self.get_logger().info('angle:')
-        #    angle = self.get_angle_to_detected_ring()
-        #    self.get_logger().info(str(angle))   
-        #return
         
+        # just take a short break from everything
         time.sleep(1)
         
         self.parking_goal_x = position_x
@@ -324,6 +329,9 @@ class Parking(Node):
         # publishing again just to be sure :)
         self.publish_arm_command()
         
+        # set marker color for approching green ring location
+        set_marker_colors(0.0, 0.5, 0.1)
+        
         while not self.rc._arrived:               
                 self.publish_arm_command()
                 self.get_logger().info('waiting until robot arrives at parking location')
@@ -341,21 +349,35 @@ class Parking(Node):
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
+        # set marker color for looking for ring
+        set_marker_colors(1.0, 0.0, 0.0)
+        
         while not self.spotted_ring:
             self.get_logger().info('can not find parking ring. searching...')
+            self.send_marker(position_x - 0.1, position_y, 1, 0.15, "searching_parking_ring")
             self.publish_arm_command()
             self.rotate(6.3)
             self.move_forward(0.1)
             time.sleep(1.0)
         
+        # set marker color for parking at center of detected ring
+        set_marker_colors(0.635, 0.823, 0.874)
+        
         for i in range(3):
             self.get_logger().info('parking...')
+            self.send_marker(self.spotted_ring_x, self.spotted_ring_y)
+            self.send_marker(self.spotted_ring_x - 0.1, self.spotted_ring_y, 1, 0.15, "parking_ring_center")
+                
             if robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.05):
                 self.get_logger().info('close enough to center -> stopping parking')
                 break
+            
             self.rotate(-self.get_angle_to_detected_ring())
             self.approach_final_parking_spot(0.3)
+        
         self.get_logger().info('parking finished')
+        set_marker_colors(0.0, 0.5, 0.1)
+        self.send_marker(self.spotted_ring_x - 0.1, self.spotted_ring_y, 1, 0.15, "parking_finished")
         
         #self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
         #self.approach_final_parking_spot(0.3)
@@ -502,9 +524,9 @@ class Parking(Node):
         marker.scale.z = scale
 
         # Set the color
-        marker.color.r = 0.0
-        marker.color.g = 0.5
-        marker.color.b = 0.1
+        marker.color.r = self.marker_color_r
+        marker.color.g = self.marker_color_g
+        marker.color.b = self.marker_color_b
         marker.color.a = 1.0
 
         # Set the pose of the marker
