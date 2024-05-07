@@ -179,11 +179,11 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     std::cout << "Absolute diff: " << absdiff << std::endl;
 
     if (absdiff > 60) {
-        if (numPoints < 2500) {
+        if (numPoints < 2000) {
             return;
         }
     }
-    if (numPoints < 3200) {
+    if (numPoints < 3000) {
         if (absdiff < 60) {
             return;
         }
