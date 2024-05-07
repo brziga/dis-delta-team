@@ -61,16 +61,35 @@ class CylinderObjectIdentifier(Node):
         robot_frame_x = msg.pose.position.x
         robot_frame_y = msg.pose.position.y
         robot_frame_z = msg.pose.position.z
+        r = msg.color.r
+        g = msg.color.g
+        b = msg.color.b
+        rgb = str(r) + str(g) + str(b)
         
         # transforming marker position from robot frame to map frame
         map_position = self.transform_from_robot_to_map_frame(robot_frame_x, robot_frame_y, robot_frame_z, msg.header.stamp)
         if map_position is not None:
             #self.process_cylinder_position_in_map_frame(map_position[0], map_position[1] ,map_position[2])
-            self.process_cylinder_position_in_map_frame(msg.pose.position.x, msg.pose.position.y, msg.pose.position.z)
+            self.process_cylinder_position_in_map_frame(msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, (r,g,b))
+
+    def color_detect(self, rgb):
+        r = float(rgb[0])
+        g = float(rgb[1])
+        b = float(rgb[2])
+
+        if b < 5 and r > 75 and g > 75:
+            return "yellow"
+        elif max([r,g,b]) == r:
+            return "red"
+        elif max([r,g,b]) == g:
+            return "green"
+        elif max([r,g,b]) == b:
+            return "blue"
+        return ""
 
 
     # processes the position of a cylinder that was spottet in the map coordinate frame at cylinder_x, cylinder_y, cylinder_z
-    def process_cylinder_position_in_map_frame(self, cylinder_x, cylinder_y ,cylinder_z):
+    def process_cylinder_position_in_map_frame(self, cylinder_x, cylinder_y ,cylinder_z, colorrgb):
     
         # check if the new cylinder is close to any of the known cylinders
         distance_threshold = 0.75
@@ -88,13 +107,18 @@ class CylinderObjectIdentifier(Node):
             
             if (dist_squared < distance_threshold_squared):
                 # this cylinder already exists!
-                self.get_logger().info('ALREADY KNOWN cylinder detected at (map_frame): (x: %f  y: %f  z: %f)' % (cylinder_x, cylinder_y, cylinder_z))
+                #self.get_logger().info('ALREADY KNOWN cylinder detected at (map_frame): (x: %f  y: %f  z: %f)' % (cylinder_x, cylinder_y, cylinder_z))
                 return
                 
+        color = self.color_detect(colorrgb)
+        if color == "":
+            return
+        
+
         # cylinder is not close to any of the known cylinders -> it must be a new cylinder!
-        self.insert_level_object(cylinder_x, cylinder_y, cylinder_z, "red","cylinder_"+str(self.cylinderId))
+        self.insert_level_object(cylinder_x, cylinder_y, cylinder_z, color,"cylinder_"+str(self.cylinderId))
         self.cylinderId = self.cylinderId + 1
-        self.get_logger().info('FOUND A NEW cylinder detected at (map_frame): (x: %f  y: %f  z: %f)' % (cylinder_x, cylinder_y, cylinder_z))
+        self.get_logger().info('FOUND A NEW cylinder detected at (map_frame): (x: %f  y: %f  z: %f) of a color %s' % (cylinder_x, cylinder_y, cylinder_z, color))
 
 
     # trys to transfer the given point from robot frame to map frame.
@@ -160,14 +184,15 @@ class CylinderObjectIdentifier(Node):
             x = self.current_cylinder_objects_.position_x[i]
             y = self.current_cylinder_objects_.position_y[i]
             object_id = self.current_cylinder_objects_.object_id[i]
+            color = self.current_cylinder_objects_.color[i]
             
-            self.send_marker(x, y, 2 * i + 1000)
-            self.send_marker(x - 0.15, y, 2 * i + 1000 + 1, 0.15, object_id)
+            self.send_marker(x, y, color, 2 * i + 1000)
+            self.send_marker(x - 0.15, y, color, 2 * i + 1000 + 1, 0.15, object_id)
         
         
         
         # send marker when a new level object is discovered
-    def send_marker(self, x, y, marker_id, scale = 0.1, text = ""):
+    def send_marker(self, x, y, color, marker_id, scale = 0.1, text = ""):
         point_in_map_frame = PointStamped()
         point_in_map_frame.header.frame_id = "/map"
         point_in_map_frame.header.stamp = self.get_clock().now().to_msg()
@@ -176,11 +201,11 @@ class CylinderObjectIdentifier(Node):
         point_in_map_frame.point.y = y
         point_in_map_frame.point.z = 1.0
         
-        marker = self.create_marker(point_in_map_frame, marker_id, scale, text)
+        marker = self.create_marker(point_in_map_frame, color, marker_id, scale, text)
         self.marker_pub.publish(marker)
             
             
-    def create_marker(self, point_stamped, marker_id, scale, text):
+    def create_marker(self, point_stamped, color, marker_id, scale, text):
         marker = Marker()
 
         marker.header = point_stamped.header
@@ -192,7 +217,7 @@ class CylinderObjectIdentifier(Node):
             
         marker.action = marker.ADD
         marker.id = marker_id
-        marker.lifetime = Duration(sec=3)
+        marker.lifetime = Duration(sec=10000)
         marker.text = text
 
         # Set the scale of the marker
@@ -202,9 +227,31 @@ class CylinderObjectIdentifier(Node):
         marker.scale.z = scale
 
         # Set the color
-        marker.color.r = 1.0
-        marker.color.g = 0.3
-        marker.color.b = 0.0
+
+        r = 0.0
+        g = 0.0
+        b = 0.0
+
+        if color == "yellow":
+            r = 255.0
+            g = 255.0
+            b = 0.0
+        elif color == "red":
+            r = 255.0
+            g = 0.0
+            b = 0.0
+        elif color == "green":
+            r = 0.0
+            g = 255.0
+            b = 0.0
+        elif color == "blue":
+            r = 0.0
+            g = 0.0
+            b = 255.0
+
+        marker.color.r = r
+        marker.color.g = g
+        marker.color.b = b
         marker.color.a = 1.0
 
         # Set the pose of the marker
