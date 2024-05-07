@@ -40,7 +40,7 @@ class CylinderObjectIdentifier(Node):
         self.cylinderId = 1
         
         # creating the publisher and a timer to publish level objects regulary
-        self.publisher_ = self.create_publisher(CylinderObjects, 'level_objects', 1)
+        self.publisher_ = self.create_publisher(CylinderObjects, 'cylinder_objects', 1)
         timer_period = 1.0  # seconds
         self.timer = self.create_timer(timer_period, self.publish_level_objects)
         
