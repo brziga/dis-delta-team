@@ -348,13 +348,18 @@ class Parking(Node):
             self.move_forward(0.1)
             time.sleep(1.0)
         
-        # TODO: try loop over robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.1) instead (with max interations)
-        self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
-        self.approach_final_parking_spot(0.3)
-        self.rotate(-self.get_angle_to_detected_ring())
-        self.approach_final_parking_spot(0.3)
-        self.rotate(-self.get_angle_to_detected_ring())
-        self.approach_final_parking_spot(0.3)
+        for i in range(3):
+            if robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.05):
+                break
+            self.rotate(-self.get_angle_to_detected_ring())
+            self.approach_final_parking_spot(0.3)
+        
+        #self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
+        #self.approach_final_parking_spot(0.3)
+        #self.rotate(-self.get_angle_to_detected_ring())
+        #self.approach_final_parking_spot(0.3)
+        #self.rotate(-self.get_angle_to_detected_ring())
+        #self.approach_final_parking_spot(0.3)
         
         
         self.currently_parking = False
