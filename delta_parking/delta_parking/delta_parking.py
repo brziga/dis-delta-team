@@ -351,10 +351,11 @@ class Parking(Node):
         for i in range(3):
             self.get_logger().info('parking...')
             if robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.05):
-                self.get_logger().info('parking finished: close enough to center')
+                self.get_logger().info('close enough to center -> stopping parking')
                 break
             self.rotate(-self.get_angle_to_detected_ring())
             self.approach_final_parking_spot(0.3)
+        self.get_logger().info('parking finished')
         
         #self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
         #self.approach_final_parking_spot(0.3)
