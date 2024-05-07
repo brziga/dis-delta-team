@@ -364,7 +364,7 @@ class Parking(Node):
         self.set_marker_colors(0.635, 0.823, 0.874)
         
         self.rotate(-self.get_angle_to_detected_ring())
-        for i in range(3):
+        for i in range(5):
             self.get_logger().info('parking...')
             self.send_marker(self.spotted_ring_x, self.spotted_ring_y)
             self.send_marker(self.spotted_ring_x - 0.1, self.spotted_ring_y, 1, 0.15, "parking_ring_center")
