@@ -313,13 +313,16 @@ class Parking(Node):
         self.publish_arm_command()
         
         # waiting for transforms to be availaible
-        self.is_close_enough_for_parking(position_x, position_y)
+        self.robot_is_close_to_point(position_x, position_y, 0.4)
         
         self.currently_parking = True
 
         # moving to parking spot
         self.get_logger().info('parking at (x: %f  y: %f)' % (position_x, position_y))
         self.rc.move_to_position(position_x, position_y, 0.0)
+        
+        # publishing again just to be sure :)
+        self.publish_arm_command()
         
         while not self.rc._arrived:               
                 self.publish_arm_command()
@@ -328,7 +331,7 @@ class Parking(Node):
                 self.send_marker(position_x, position_y)
                 self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_nav_goal")
                 
-                if self.is_close_enough_for_parking(position_x, position_y): # replace by self.spotted_ring when receiving markers works + increase close enough distance
+                if self.spotted_ring or self.robot_is_close_to_point(position_x, position_y, 0.4):
                     self.cancel_task()
                     
                 time.sleep(0.2)
@@ -338,13 +341,15 @@ class Parking(Node):
         self.get_logger().info('arrived at parking spot. beginning with parking')        
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
-        while self.get_angle_to_detected_ring() is None:
-            self.get_logger().info('waiting until a ring marker is received')
-            self.rotate(1.0)
+        while not self.spotted_ring:
+            self.get_logger().info('can not find parking ring. searching...')
+            self.publish_arm_command()
+            self.rotate(6.3)
+            self.move_forward(0.1)
             time.sleep(1.0)
         
+        # TODO: try loop over robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.1) instead (with max interations)
         self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn
-        
         self.approach_final_parking_spot(0.3)
         self.rotate(-self.get_angle_to_detected_ring())
         self.approach_final_parking_spot(0.3)
@@ -384,7 +389,7 @@ class Parking(Node):
         
         if not self.currently_parking:
             return
-        if not self.is_close_enough_for_parking(self.parking_goal_x, self.parking_goal_y, 1.5):
+        if not self.robot_is_close_to_point(self.parking_goal_x, self.parking_goal_y, 1.5):
             return
         
         self.spotted_ring = True
@@ -392,7 +397,7 @@ class Parking(Node):
         self.spotted_ring_y = y
         
         
-    def is_close_enough_for_parking(self, target_x, target_y, close_enough_distance = 0.4):
+    def robot_is_close_to_point(self, target_x, target_y, close_enough_distance):
         x1 = target_x
         y1 = target_y
         
