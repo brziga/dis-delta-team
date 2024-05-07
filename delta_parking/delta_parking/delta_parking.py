@@ -248,7 +248,7 @@ class Parking(Node):
         #thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
         #thread.start()
         
-    def set_marker_colors(r, g, b):
+    def set_marker_colors(self, r, g, b):
         self.marker_color_r = r
         self.marker_color_g = g
         self.marker_color_b = b
