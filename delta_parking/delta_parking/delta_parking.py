@@ -330,7 +330,7 @@ class Parking(Node):
         self.publish_arm_command()
         
         # set marker color for approching green ring location
-        set_marker_colors(0.0, 0.5, 0.1)
+        self.set_marker_colors(0.0, 0.5, 0.1)
         
         while not self.rc._arrived:               
                 self.publish_arm_command()
@@ -350,7 +350,7 @@ class Parking(Node):
         self.send_marker(position_x - 0.1, position_y, 1, 0.15, "parking_in_progress")
         
         # set marker color for looking for ring
-        set_marker_colors(1.0, 0.0, 0.0)
+        self.set_marker_colors(1.0, 0.0, 0.0)
         
         while not self.spotted_ring:
             self.get_logger().info('can not find parking ring. searching...')
@@ -361,7 +361,7 @@ class Parking(Node):
             time.sleep(1.0)
         
         # set marker color for parking at center of detected ring
-        set_marker_colors(0.635, 0.823, 0.874)
+        self.set_marker_colors(0.635, 0.823, 0.874)
         
         self.rotate(-self.get_angle_to_detected_ring())
         for i in range(3):
@@ -377,7 +377,7 @@ class Parking(Node):
             self.approach_final_parking_spot(0.3)
         
         self.get_logger().info('parking finished')
-        set_marker_colors(0.0, 0.5, 0.1)
+        self.set_marker_colors(0.0, 0.5, 0.1)
         self.send_marker(self.spotted_ring_x - 0.1, self.spotted_ring_y, 1, 0.15, "parking_finished")
         
         #self.rotate(-self.get_angle_to_detected_ring()) # rotation: positive value -> anti clock wise. 6.3 = 2 pi = one full turn

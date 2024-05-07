@@ -273,6 +273,9 @@ class RingDetector(Node):
                 except TransformException as te:
                     self.get_logger().info(f"Cound not get the transform: {te}")
                     return
+                    
+                if float(map_frame_z ) > 0.1:
+                    return
 
                 """
                 try:
