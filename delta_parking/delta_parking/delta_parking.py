@@ -369,7 +369,7 @@ class Parking(Node):
             self.send_marker(self.spotted_ring_x, self.spotted_ring_y)
             self.send_marker(self.spotted_ring_x - 0.1, self.spotted_ring_y, 1, 0.15, "parking_ring_center")
                 
-            if robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.05):
+            if self.robot_is_close_to_point(self.spotted_ring_x, self.spotted_ring_y, 0.05):
                 self.get_logger().info('close enough to center -> stopping parking')
                 break
             
