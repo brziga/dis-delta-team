@@ -177,8 +177,11 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
     std::cout << "Cloud Size: " << numPoints << std::endl;
     double absdiff = std::abs(avgR-avgG)+std::abs(avgR-avgB)+std::abs(avgB-avgG);
     std::cout << "Absolute diff: " << absdiff << std::endl;
+    
+    bool okay = absdiff > 120 || numPoints > 2500;
+    if (!okay) return;
 
-    if (absdiff > 60) {
+    /*if (absdiff > 60) {
         if (numPoints < 2500) {
             return;
         }
@@ -187,7 +190,7 @@ void cloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
         if (absdiff < 60) {
             return;
         }
-    }    
+    } */   
     
 
     
