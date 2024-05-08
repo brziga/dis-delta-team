@@ -14,11 +14,76 @@ from std_msgs.msg import ColorRGBA
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 
+from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs_py import point_cloud2 as pc2
+
+from visualization_msgs.msg import Marker
+
 qos_profile = QoSProfile(
           durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
           reliability=QoSReliabilityPolicy.RELIABLE,
           history=QoSHistoryPolicy.KEEP_LAST,
           depth=1)
+
+PCL_Z_THRESH = 0.25
+DIST_EXST_THRESH = 50
+WIDTH_DIFF_THRESH = 5
+
+def rgb_to_color_name(rgb):
+    R, G, B = rgb
+
+    if R > 200 and G < 50 and B < 50:
+        return "Red"
+    elif G > 200 and R < 50 and B < 50:
+        return "Green"
+    elif B > 200 and R < 50 and G < 50:
+        return "Blue"
+    elif R > 150 and B > 150 and G < 75:
+        return "Purple"
+    elif R > 200 and G > 200 and B < 50:
+        return "Yellow"
+    elif R < 50 and G < 50 and B < 50:
+        return "Black"
+    elif R > 200 and G > 200 and B > 200:
+        return "White"
+    else:
+        return "Unknown"
+
+# def point_below_center(center, axes, angle):
+#     # Unpack center and axes
+#     cx, cy = center
+#     a, b = axes
+
+#     # Calculate the non-rotated point directly below the center
+#     x = 0
+#     y = b
+
+#     # Convert angle to radians
+#     theta = np.radians(angle)
+
+#     # Apply rotation
+#     x_rotated = x * np.cos(theta) - y * np.sin(theta)
+#     y_rotated = x * np.sin(theta) + y * np.cos(theta)
+
+#     # Adjust point based on the center location
+#     point_below = [int(cx + x_rotated), int(cy + y_rotated)]
+
+#     return point_below
+
+class RingObject:
+    def __init__(self, id, center, ref_point, corners, ellipses, masks, color_num, color_name) -> None:
+        self.id = id
+        self.center = center # center of the ring
+        self.ref_point = ref_point
+        self.ellipses = ellipses # the ellipses objects
+        self.masks = masks # ring mask, large mask, small (center) mask
+        self.color_num = color_num # color of the ring - numeric
+        self.color_name = color_name # name of the color of the ring
+        self.corners = corners # bounding corners (left top and bottom right)
+        self.pcl_coords = None
+        self.hollow = None
+        self.color_voting = {}
+
 
 class RingDetector(Node):
     def __init__(self):
@@ -28,6 +93,8 @@ class RingDetector(Node):
         timer_frequency = 2
         timer_period = 1/timer_frequency
 
+        marker_topic = "ring_marker" #TODO
+
         # An object we use for converting images between ROS format and OpenCV format
         self.bridge = CvBridge()
 
@@ -36,10 +103,15 @@ class RingDetector(Node):
         self.marker_num = 1
 
         # Subscribe to the image and/or depth topic
-        self.image_sub = self.create_subscription(Image, "/top_camera/rgb/preview/image_raw", self.image_callback, 1)
-        self.depth_sub = self.create_subscription(Image, "/top_camera/rgb/preview/depth", self.depth_callback, 1)
-        #self.image_sub = self.create_subscription(Image, "/oakd/rgb/preview/image_raw", self.image_callback, 1)
-        #self.depth_sub = self.create_subscription(Image, "/oakd/rgb/preview/depth", self.depth_callback, 1)
+        self.image_sub = self.create_subscription(Image, "/oakd/rgb/preview/image_raw", self.image_callback, 1)
+        self.depth_sub = self.create_subscription(Image, "/oakd/rgb/preview/depth", self.depth_callback, 1)
+        self.pcl_sub = self.create_subscription(PointCloud2, "/oakd/rgb/preview/depth/points", self.pcl_callback, 1)
+
+        self.marker_pub = self.create_publisher(Marker, marker_topic, QoSReliabilityPolicy.BEST_EFFORT)
+
+        self.next_ring_id = 0
+        self.rings_candidates = []
+        self.rings_detected = []
 
         # Publiser for the visualization markers
         # self.marker_pub = self.create_publisher(Marker, "/ring", QoSReliabilityPolicy.BEST_EFFORT)
@@ -51,15 +123,20 @@ class RingDetector(Node):
         cv2.namedWindow("Binary Image", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected contours", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected rings", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)        
+        cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)
+        cv2.namedWindow("Detected ring mask", cv2.WINDOW_NORMAL)
 
-    def image_callback(self, data):
-        self.get_logger().info(f"I got a new image! Will try to find rings...")
+
+    def image_callback(self, data): #sig for use with ROS2
+
+        # ROS2 overhead #
+        # self.get_logger().info(f"I got a new image! Will try to find rings...")
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
             print(e)
+        ################
 
         blue = cv_image[:,:,0]
         green = cv_image[:,:,1]
@@ -139,12 +216,14 @@ class RingDetector(Node):
                 # border_minor = (le[1][0]-se[1][0])/2
                 # border_diff = np.abs(border_major - border_minor)
 
-                # if border_diff>4:
+                # if border_diff>WIDTH_DIFF_THRESH:
                 #     continue
                     
                 candidates.append((e1,e2))
 
-        print("Processing is done! found", len(candidates), "candidates for rings")
+        # print("Processing is done! found", len(candidates), "candidates for rings")
+
+        vis_all_masks = np.zeros((cv_image.shape[0], cv_image.shape[1]))
 
         # Plot the rings on the image
         for c in candidates:
@@ -156,6 +235,33 @@ class RingDetector(Node):
             # drawing the ellipses on the image
             cv2.ellipse(cv_image, e1, (0, 255, 0), 2)
             cv2.ellipse(cv_image, e2, (0, 255, 0), 2)
+
+            # larger and smaller ellipse
+            e1_minor_axis = e1[1][0]
+            e1_major_axis = e1[1][1]
+
+            e2_minor_axis = e2[1][0]
+            e2_major_axis = e2[1][1]
+
+            if e1_major_axis>=e2_major_axis and e1_minor_axis>=e2_minor_axis: # the larger ellipse should have both axis larger
+                le = e1 # e1 is larger ellipse
+                se = e2 # e2 is smaller ellipse
+            elif e2_major_axis>=e1_major_axis and e2_minor_axis>=e1_minor_axis:
+                le = e2 # e2 is larger ellipse
+                se = e1 # e1 is smaller ellipse
+            else:
+                le = se = None
+
+            # ellipse masks
+            mask_large = np.zeros((cv_image.shape[0], cv_image.shape[1]))
+            cv2.ellipse(mask_large, le, 1, -1)
+            mask_small = np.zeros((cv_image.shape[0], cv_image.shape[1]))
+            cv2.ellipse(mask_small, se, 1, -1)
+
+            mask_ring = cv2.subtract(mask_large, mask_small)
+
+            vis_all_masks += mask_ring
+
 
             # Get a bounding box, around the first ellipse ('average' of both elipsis)
             size = (e1[1][0]+e1[1][1])/2
@@ -171,9 +277,66 @@ class RingDetector(Node):
             y_min = y1 if y1 > 0 else 0
             y_max = y2 if y2 < cv_image.shape[1] else cv_image.shape[1]
 
+            cv2.circle(cv_image, (y_min, x_min), radius=3, color=(255, 0, 0), thickness=-1)
+            cv2.circle(cv_image, (y_max, x_max), radius=3, color=(255, 0, 0), thickness=-1)
+            cv2.rectangle(cv_image, (y_min, x_min), (y_max, x_max), (0, 0, 250), 2)
+
+            # print(f"\nDetected ring [{self.next_ring_id}] with center {center}")
+
+            # colours
+            bool_mask = mask_ring.astype(bool)
+            average_color = np.mean(cv_image[bool_mask], axis=0)
+            avg_color_name = rgb_to_color_name(average_color)
+            # print(f"Ring color: {avg_color_name} {average_color}")
+            if(avg_color_name != "Unknown"):
+                pass
+
+
+            label = avg_color_name
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            font_color = (0, 0, 255)  # Red
+            thickness = 1
+            line_type = cv2.LINE_AA
+            text_x = x_min + 25
+            text_y = y_min - 100
+            cv2.putText(cv_image, label, (text_y, text_x), font, font_scale, font_color, thickness, line_type)
+
+            # refp_axes = [
+            #     (le[1][0] + se[1][0]) / 2,
+            #     (le[1][1] + se[1][1]) / 2
+            # ]
+            # ref_point = point_below_center(center, refp_axes, se[2])
+            # ref_point[0] = ref_point[0] if ref_point[0] > 0 else 0
+            # ref_point[1] = ref_point[1] if ref_point[1] > 0 else 0
+            # ref_point[0] = ref_point[0] if ref_point[0] < cv_image.shape[0]-1 else cv_image.shape[0]
+            # ref_point[1] = ref_point[1] if ref_point[1] < cv_image.shape[1]-1 else cv_image.shape[1]
+            # print(f"Ref point: {ref_point}")
+            # cv2.circle(cv_image, (ref_point[1], ref_point[0]), radius=3, color=(255, 0, 255), thickness=-1)
+
+            rows = np.where(mask_ring[int(center[0])::, int(center[1])] != 0)
+            ref_point = [np.median(rows), int(center[0])]
+
+            self.rings_candidates.append(
+                RingObject(
+                    self.next_ring_id, #id
+                    center, #center
+                    ref_point,
+                    ((y_min, x_min), (y_max, x_max)), #corners
+                    c, #ellipses
+                    (mask_ring, mask_large, mask_small), #masks
+                    average_color,
+                    avg_color_name
+                )
+            )
+            self.next_ring_id += 1
+
+
         if len(candidates)>0:
                 cv2.imshow("Detected rings",cv_image)
+                cv2.imshow("Detected ring mask", vis_all_masks)
                 cv2.waitKey(1)
+
 
     def depth_callback(self,data):
 
@@ -192,6 +355,106 @@ class RingDetector(Node):
 
         cv2.imshow("Depth window", image_viz)
         cv2.waitKey(1)
+        
+
+        for ring_candidate in self.rings_candidates:
+
+            contains_inf = np.any(depth_image[ring_candidate.masks[2].astype(bool)]) # mask with inner mask of the ring and check if there is an infinite depth pixel
+            ring_candidate.hollow = contains_inf
+
+            # print(f"Ring {ring_candidate.id} [{ring_candidate.center}] hollow is {contains_inf}")
+
+
+
+    def pcl_callback(self,data):
+
+        height = data.height
+        width = data.width
+        point_step = data.point_step
+        row_step = data.row_step
+
+        for ring_candidate in self.rings_candidates:
+
+            # print(ring_candidate.center)
+            x, y = ring_candidate.ref_point
+            y, x = int(y), int(x)
+            # print(y)
+            # print(x)
+            
+
+            pcl =  pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
+            # print(pcl)
+            pcl = pcl.reshape((height,width,3))
+            # print(pcl)
+
+            y = min(y, pcl.shape[0]-1)
+            y = min(x, pcl.shape[1]-1)
+
+            pcl_center = pcl[y,x,:]
+            # print(pcl_center)
+
+            ring_candidate.pcl_coords = pcl_center
+
+            # print(f"PCL of ring {ring_candidate.id}: {pcl_center}")
+
+            if pcl_center[2] > PCL_Z_THRESH and ring_candidate.hollow == True:
+                for det_ring in self.rings_detected:
+                    distance = np.linalg.norm(
+                        ring_candidate.pcl_coords 
+                        - 
+                        det_ring.pcl_coords
+                    )
+
+                    print(f"Distance between {ring_candidate.pcl_coords} and {det_ring.pcl_coords} is {distance}")
+
+                    if not np.isinf(distance) and not np.isnan(distance) and distance > DIST_EXST_THRESH:
+                        self.rings_detected.append(ring_candidate)
+                        print(f"Confirmed ring {ring_candidate.id} with: \n\t center: {ring_candidate.center} \n\t color: {ring_candidate.color_name} {ring_candidate.color_num} \n\t hollow: {ring_candidate.hollow} \n\t pcl coords: {ring_candidate.pcl_coords}")
+                    else:
+                        if ring_candidate.color_name == "Unknown": continue
+                        elif ring_candidate.color_name not in det_ring.color_voting.keys():
+                            det_ring.color_voting[ring_candidate.color_name] = 1
+                        else:
+                            det_ring.color_voting[ring_candidate.color_name] += 1
+                    
+                if len(self.rings_detected) == 0:
+                    if ring_candidate.color_name != "Unknown":
+                        ring_candidate.color_voting[ring_candidate.color_name] = 1
+                    self.rings_detected.append(ring_candidate)
+                    print(f"Confirmed ring {ring_candidate.id} with: \n\t center: {ring_candidate.center} \n\t color: {ring_candidate.color_name} {ring_candidate.color_num} \n\t hollow: {ring_candidate.hollow} \n\t pcl coords: {ring_candidate.pcl_coords}")
+
+
+            # # create marker
+            # marker = Marker()
+
+            # marker.header.frame_id = "/base_link" #TODO
+            # marker.header.stamp = data.header.stamp
+
+            # marker.type = 2
+            # marker.id = 0
+
+            # # Set the scale of the marker
+            # scale = 0.1
+            # marker.scale.x = scale
+            # marker.scale.y = scale
+            # marker.scale.z = scale
+
+            # # Set the color
+            # marker.color.r = 0.0
+            # marker.color.g = 0.0
+            # marker.color.b = 1.0
+            # marker.color.a = 1.0
+
+            # # Set the pose of the marker
+            # marker.pose.position.x = float(pcl_center[0])
+            # marker.pose.position.y = float(pcl_center[1])
+            # marker.pose.position.z = float(pcl_center[2])
+
+            # self.marker_pub.publish(marker)
+
+        self.rings_candidates = []
+
+
 
 
 def main():
