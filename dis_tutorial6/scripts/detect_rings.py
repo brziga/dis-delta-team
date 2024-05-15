@@ -1,10 +1,18 @@
 #!/usr/bin/python3
 
+# for transforming between coordinate frames
+from tf2_ros.buffer import Buffer
+from tf2_ros import TransformException
+from tf2_ros.transform_listener import TransformListener
+from rclpy.duration import Duration
+from geometry_msgs.msg import PointStamped
+import tf2_geometry_msgs as tfg
+
+
 import rclpy
 from rclpy.node import Node
 import cv2
 import numpy as np
-import tf2_ros
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PointStamped, Vector3, Pose
@@ -25,7 +33,7 @@ qos_profile = QoSProfile(
           history=QoSHistoryPolicy.KEEP_LAST,
           depth=1)
 
-PCL_Z_THRESH = 0.25
+PCL_Z_THRESH = 0.55
 DIST_EXST_THRESH = 50
 WIDTH_DIFF_THRESH = 5
 
@@ -103,9 +111,9 @@ class RingDetector(Node):
         self.marker_num = 1
 
         # Subscribe to the image and/or depth topic
-        self.image_sub = self.create_subscription(Image, "/oakd/rgb/preview/image_raw", self.image_callback, 1)
-        self.depth_sub = self.create_subscription(Image, "/oakd/rgb/preview/depth", self.depth_callback, 1)
-        self.pcl_sub = self.create_subscription(PointCloud2, "/oakd/rgb/preview/depth/points", self.pcl_callback, 1)
+        self.image_sub = self.create_subscription(Image, "/top_camera/rgb/preview/image_raw", self.image_callback, 1)
+        self.depth_sub = self.create_subscription(Image, "/top_camera/rgb/preview/depth", self.depth_callback, 1)
+        self.pcl_sub = self.create_subscription(PointCloud2, "/top_camera/rgb/preview/depth/points", self.pcl_callback, 1)
 
         self.marker_pub = self.create_publisher(Marker, marker_topic, QoSReliabilityPolicy.BEST_EFFORT)
 
@@ -114,11 +122,11 @@ class RingDetector(Node):
         self.rings_detected = []
 
         # Publiser for the visualization markers
-        # self.marker_pub = self.create_publisher(Marker, "/ring", QoSReliabilityPolicy.BEST_EFFORT)
+        #self.marker_pub = self.create_publisher(Marker, "/ring", QoSReliabilityPolicy.BEST_EFFORT)
 
         # Object we use for transforming between coordinate frames
-        # self.tf_buf = tf2_ros.Buffer()
-        # self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
+        self.tf_buf = Buffer()
+        self.tf_listener = TransformListener(self.tf_buf, self)
 
         cv2.namedWindow("Binary Image", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected contours", cv2.WINDOW_NORMAL)
@@ -316,6 +324,8 @@ class RingDetector(Node):
 
             rows = np.where(mask_ring[int(center[0])::, int(center[1])] != 0)
             ref_point = [np.median(rows), int(center[0])]
+            # cv2.circle(cv_image, (ref_point[1], ref_point[0]), radius=3, color=(255, 0, 255), thickness=-1)
+
 
             self.rings_candidates.append(
                 RingObject(
@@ -380,6 +390,9 @@ class RingDetector(Node):
             y, x = int(y), int(x)
             # print(y)
             # print(x)
+            xc, yc = ring_candidate.center
+            yc, xc = int(yc), int(xc)
+
             
 
             pcl =  pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
@@ -390,14 +403,49 @@ class RingDetector(Node):
             y = min(y, pcl.shape[0]-1)
             y = min(x, pcl.shape[1]-1)
 
-            pcl_center = pcl[y,x,:]
+            pcl_center = pcl[xc,yc,:]
             # print(pcl_center)
+
+            time_now = rclpy.time.Time()
+
+            point_in_arm_camera_frame = PointStamped()
+            point_in_arm_camera_frame.header.frame_id = "/top_camera_link"
+            point_in_arm_camera_frame.header.stamp = time_now.to_msg()
+            point_in_arm_camera_frame.point.x = float(pcl_center[0])
+            point_in_arm_camera_frame.point.y = float(pcl_center[1])
+            point_in_arm_camera_frame.point.z = float(pcl_center[2])
+        
+            
+            
+            timeout = rclpy.duration.Duration(seconds=0.1)
+            
+            
+            #point_in_robot_frame = PointStamped()
+            #point_in_robot_frame.header.frame_id = "/top_camera_link"
+            #point_in_robot_frame.header.stamp = header_stamp
+            #point_in_robot_frame.point.x = robot_frame_x
+            #point_in_robot_frame.point.y = robot_frame_y
+            #point_in_robot_frame.point.z = robot_frame_z
+
+            try:
+                trans = self.tf_buf.lookup_transform("map", "top_camera_link", time_now, timeout)
+                point_in_map_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans)
+                map_frame_x = point_in_map_frame.point.x
+                map_frame_y = point_in_map_frame.point.y
+                map_frame_z = point_in_map_frame.point.z
+            except TransformException as te:
+                self.get_logger().info(f"Cound not get the transform: {te}")
+                return
+
+            # print(map_frame_z)
+            if map_frame_z < PCL_Z_THRESH:
+                return
 
             ring_candidate.pcl_coords = pcl_center
 
             # print(f"PCL of ring {ring_candidate.id}: {pcl_center}")
 
-            if pcl_center[2] > PCL_Z_THRESH and ring_candidate.hollow == True:
+            if ring_candidate.hollow == True:
                 for det_ring in self.rings_detected:
                     distance = np.linalg.norm(
                         ring_candidate.pcl_coords 
@@ -405,7 +453,7 @@ class RingDetector(Node):
                         det_ring.pcl_coords
                     )
 
-                    print(f"Distance between {ring_candidate.pcl_coords} and {det_ring.pcl_coords} is {distance}")
+                    # print(f"Distance between {ring_candidate.pcl_coords} and {det_ring.pcl_coords} is {distance}")
 
                     if not np.isinf(distance) and not np.isnan(distance) and distance > DIST_EXST_THRESH:
                         self.rings_detected.append(ring_candidate)
@@ -425,32 +473,32 @@ class RingDetector(Node):
 
 
             # # create marker
-            # marker = Marker()
+            marker = Marker()
 
-            # marker.header.frame_id = "/base_link" #TODO
-            # marker.header.stamp = data.header.stamp
+            marker.header.frame_id = "/map"
+            marker.header.stamp = data.header.stamp
 
-            # marker.type = 2
-            # marker.id = 0
+            marker.type = Marker.SPHERE
+            marker.id = 0
 
             # # Set the scale of the marker
-            # scale = 0.1
-            # marker.scale.x = scale
-            # marker.scale.y = scale
-            # marker.scale.z = scale
+            scale = 0.1
+            marker.scale.x = scale
+            marker.scale.y = scale
+            marker.scale.z = scale
 
             # # Set the color
-            # marker.color.r = 0.0
-            # marker.color.g = 0.0
-            # marker.color.b = 1.0
-            # marker.color.a = 1.0
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
 
             # # Set the pose of the marker
-            # marker.pose.position.x = float(pcl_center[0])
-            # marker.pose.position.y = float(pcl_center[1])
-            # marker.pose.position.z = float(pcl_center[2])
+            marker.pose.position.x = float(map_frame_x)
+            marker.pose.position.y = float(map_frame_y)
+            marker.pose.position.z = float(map_frame_z)
 
-            # self.marker_pub.publish(marker)
+            self.marker_pub.publish(marker)
 
         self.rings_candidates = []
 
