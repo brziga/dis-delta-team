@@ -64,9 +64,13 @@ class detect_faces(Node):
 	def get_camera_width_in_meters(self, camera_opening_angle_in_rad_LEFT_RIGHT, distance_in_meters):
 		return np.tan(float(camera_opening_angle_in_rad_LEFT_RIGHT / 2)) * distance_in_meters * 2.0
 	
-	# returns the offset the face has to the camera center in meters
-	def get_side_offset_in_meters(self, offset_in_pixel, camera_width_in_meters, camera_width_in_pixels):
-		return float(offset_in_pixel) * float(camera_width_in_meters) / float(camera_width_in_pixels)
+	# returns the side offset the face has to the camera center in meters
+	def get_side_offset_in_meters(self, side_offset_in_pixel, camera_width_in_meters, camera_width_in_pixels):
+		return float(side_offset_in_pixel) * float(camera_width_in_meters) / float(camera_width_in_pixels)
+	
+	# returns the height offset the face has to the camera center in meters
+	def get_height_offset_in_meters(self, height_offset_in_pixel, camera_height_in_meters, camera_height_in_pixels):
+		return float(height_offset_in_pixel) * float(camera_height_in_meters) / float(camera_height_in_pixels)
 		
 	def deg_to_rad(self, deg):
 		return (deg / 360.0) * (2 * np.pi)
@@ -124,9 +128,13 @@ class detect_faces(Node):
 				
 				# side offset calculation
 				camera_opening_angle_in_rad_LEFT_RIGHT = self.deg_to_rad(camera_opening_angle_in_deg_LEFT_RIGHT)
-				offset_in_pixel = (camera_width_in_pixels / 2.0) - cx
+				side_offset_in_pixel = (camera_width_in_pixels / 2.0) - cx
 				camera_width_in_meters = self.get_camera_width_in_meters(camera_opening_angle_in_rad_LEFT_RIGHT, distance_in_meters)
-				side_offset_in_meters = self.get_side_offset_in_meters(offset_in_pixel, camera_width_in_meters, camera_width_in_pixels)
+				side_offset_in_meters = self.get_side_offset_in_meters(side_offset_in_pixel, camera_width_in_meters, camera_width_in_pixels)
+				
+				# height offset calculation
+				height_offset_in_pixel = (camera_height_in_pixels / 2.0) - cy
+				height_offset_in_meters = self.get_height_offset_in_meters(height_offset_in_pixel, camera_height_in_meters, camera_height_in_pixels)
 				
 				# create marker
 				marker = Marker()
@@ -151,8 +159,8 @@ class detect_faces(Node):
 
 				# Set the pose of the marker
 				marker.pose.position.x = distance_in_meters # forward /backward
-				marker.pose.position.y = side_offset_in_meters
-				marker.pose.position.z = 1.0 # up / down
+				marker.pose.position.y = side_offset_in_meters # left / right
+				marker.pose.position.z = height_offset_in_meters # up / down
 
 				self.marker_pub.publish(marker)	
 				
