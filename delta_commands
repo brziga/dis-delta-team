@@ -1,13 +1,37 @@
-cd ~/ros2_ws
-colcon build --packages-select delta_interfaces mission_control object_identifier delta_greeter delta_explorer
-// restart terminal after building and source workspace
-ros2 run mission_control mission_control
+0. nano .bashrc
+export ROS_DOMAIN_ID=12
+source /opt/ros/humble/setup.bash
+source /home/delta/colcon_ws/install/setup.bash
+source /etc/turtlebot4_discovery/setup.bash
+
+1. download dis-delta-team respository & dis_tutorial3
+1.1 git clone https://github.com/giganizer/dis-delta-team.git
+1.2 -> in dis-delta-team do: git checkout task1_realrobot   IMPORTANT
+1.3 git clone https://github.com/vicoslab/dis_tutorial3
+
+2. copy detect_people.py from colcon_ws/src/dis-delta-team/detect_people_no_point_cloud/
+into colcon_ws/src/dis_tutorial3/scripts/   IMPORTANT
+
+3. build everything
+
+4. get robot ready:
+4.1 git clone https://github.com/vicoslab/dis_tutorial5?tab=readme-ov-file
+4.2 follow the tutorial
+
+5. start localization, navigation and rviz:
+-navigate into folder where map is saved (... colcon_ws/src/dis-delta-team/selfmade_map/) and do:
+ros2 launch turtlebot4_navigation localization.launch.py map:=task1_realrobot.yaml
+-ros2 launch turtlebot4_navigation nav2.launch.py
+-ros2 launch turtlebot4_viz view_robot.launch.py
+-set pose estimation
+-try navigation in rviz
+
+ros2 run delta_explorer delta_explorer (wait after start until NAV2 is ready. restart if it dosent work after a minute)
+ros2 run dis_tutorial3 detect_people.py
+-set up rviz: add people_marker and delta_nav_marker and remove all unnecessary stuff
+
 ros2 run object_identifier object_identifier
 ros2 run delta_greeter delta_greeter
-ros2 run delta_explorer delta_explorer
 
-// download and build dis_tutorial3 from https://github.com/vicoslab/dis_tutorial3
-// gazebo and ris
-ros2 launch dis_tutorial3 sim_turtlebot_nav.launch.py
-// face detection
-ros2 run dis_tutorial3 detect_people.py
+start mission:
+ros2 run mission_control mission_control

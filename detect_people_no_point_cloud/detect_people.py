@@ -93,18 +93,15 @@ class detect_faces(Node):
 				if bbox.nelement() == 0: # skip if empty
 					continue
 
-				self.get_logger().info(f"Person has been detected!")
 
 				bbox = bbox[0]
-
-				# draw rectangle
-				cv_image = cv2.rectangle(cv_image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), self.detection_color, 3)
 
 				cx = int((bbox[0]+bbox[2])/2)
 				cy = int((bbox[1]+bbox[3])/2)
 
-				# draw the center of bounding box
-				cv_image = cv2.circle(cv_image, (cx,cy), 5, self.detection_color, -1)
+				if (cy < 125.0):
+					continue
+
 
 				self.faces.append((cx,cy))
 				
@@ -112,13 +109,13 @@ class detect_faces(Node):
 				# --- estimating distance ---
 				
 				# tuneable parameters
-				face_height_in_meters = 0.3 # meters
-				camera_opening_angle_in_deg_UP_DOWN = 70.0 # degree (NOT rad). It is the UP/DOWN angle (NOT the left/right angle)
-				camera_opening_angle_in_deg_LEFT_RIGHT = 70.0
+				face_height_in_meters = 0.21 # meters
+				camera_opening_angle_in_deg_UP_DOWN = 40.0 # degree (NOT rad). It is the UP/DOWN angle (NOT the left/right angle)
+				camera_opening_angle_in_deg_LEFT_RIGHT = 40.0
 				
 				# fixed parameters
-				camera_height_in_pixels = 240.0 # how many pixels HIGH the camera image is (y coordinate of image)
-				camera_width_in_pixels = 320.0 # how many pixels WIDTH the camera image is (x coordinate of image)
+				camera_height_in_pixels = 250.0 # how many pixels HIGH the camera image is (y coordinate of image)
+				camera_width_in_pixels = 250.0 # how many pixels WIDTH the camera image is (x coordinate of image)
 				
 				# distance calculation
 				camera_opening_angle_in_rad_UP_DOWN = self.deg_to_rad(camera_opening_angle_in_deg_UP_DOWN) # NOW its in rad ;)
@@ -135,7 +132,18 @@ class detect_faces(Node):
 				# height offset calculation
 				height_offset_in_pixel = (camera_height_in_pixels / 2.0) - cy
 				height_offset_in_meters = self.get_height_offset_in_meters(height_offset_in_pixel, camera_height_in_meters, camera_height_in_pixels)
+
+				if (distance_in_meters > 2.0):
+					continue
 				
+				self.get_logger().info(f"Person has been detected!")
+
+				# draw rectangle
+				cv_image = cv2.rectangle(cv_image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), self.detection_color, 3)
+
+				# draw the center of bounding box
+				cv_image = cv2.circle(cv_image, (cx,cy), 5, self.detection_color, -1)
+
 				# create marker
 				marker = Marker()
 

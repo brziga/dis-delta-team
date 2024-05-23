@@ -455,25 +455,13 @@ class Explorer(Node):
         # [x,y,startRotation], rotationToApply
         # USE FLOATS!! 0.0 INSTEAD OF 0 FOR EXAMPLE
         self.explorationPoints = [
-        [[-0.3, 0.0, left], c_half],
-        [[-0.3, -1.0, down], ac_half],
-        [[0.5, -2.0, up], ac_quater],
-        [[2.0, -1.7, up], c_quater],
-        [[3.5, -1.3, up], c_half],
-        [[1.0, -0.5, down], (ac_half + ac_quater)],
-        [[1.0, 0.5, downLeft], c_half],
-        [[2.0, 0.5, up], None],
-        [[2.5, 1.8, left], (c_half + c_half)],
-        [[1.5, 3.3, downLeft], (ac_half + ac_half)],
-        [[0.2, 3.3, down], (ac_half + ac_half)],
-        [[-0.8, 3.3, down], (ac_half + ac_half)],
-        [[-1.5, 4.3, down], (c_half + c_quater)],
-        [[-1.7, 2.2, right], (ac_half + ac_half)],
-        [[-1.7, 1.2, right], ac_quater],
-        [[-1.0, 1.0, up], (c_half + c_half)],
-        [[1.0, 1.75, up], ac_half],
-        [[0.0, 2.0, down], (ac_half + ac_half)],
-        [[-1.5, -0.5, left], (ac_half + ac_quater)]
+        [[-0.5, 0.0, right], c_half + c_quater],
+        [[0.5, 0.0, up], ac_half + ac_half],
+        [[2.0, 0.0, up], c_half + c_half],
+        [[1.2, -0.8, right], c_half + c_half],
+        [[2.0, -2.3, up], c_half + c_half],
+        [[0.0, -2.0, down], c_half + c_half],
+        [[-0.1, -1.0, left], c_half + c_half]
         ]
         
         self.explorationPointIndex = 0

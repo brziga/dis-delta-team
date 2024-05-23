@@ -147,7 +147,7 @@ class Greeter(Node):
         self.publish_status_timer = self.create_timer(timer_period, self.publish_status)
         
         # listen to incoming jobs
-        self.subscription = self.create_subscription(GreeterJob, 'greeter_job', self.process_incoming_job, 1)
+        self.subscription = self.create_subscription(GreeterJob, 'greeter_job', self.process_incoming_job, 10)
         self.subscription  # prevent unused variable warning
         
         # robot controller
@@ -160,6 +160,8 @@ class Greeter(Node):
         self.tts_engine.setProperty("rate", 160) # default rate is 200; subtracting 40 seems to sound better
 
         self.cmd_audio_publisher = self.create_publisher(AudioNoteVector, "/cmd_audio", 1)
+
+        self.greeted_people = 0
 
     def publish_status(self):
         msg = JobStatus()
@@ -185,6 +187,7 @@ class Greeter(Node):
         person_id = int(person_id.split("_")[-1])
 
         # moving to person
+        """
         self.get_logger().info('moving to greet person at (x: %f  y: %f  rot: %f)' % (position_x, position_y, rotation))
         self.rc.move_to_position(position_x, position_y, rotation)
         while not self.rc._arrived:
@@ -193,6 +196,7 @@ class Greeter(Node):
                 # Publish a marker
                 self.send_marker(position_x, position_y)
                 self.send_marker(position_x - 0.1, position_y, 1, 0.15, "greet_person_nav_goal")
+        """
                 
                 
         # greeting the person
@@ -214,6 +218,7 @@ class Greeter(Node):
         self.tts_engine.runAndWait()
         ##############################
 
+        """
         # Attempt to send greet TTS to robot
         self.tts_engine.save_to_file("Hello person {:2d}! Have a nice day!".format(person_id), "greeting_audio_clip.wav")
         # print("Current working directory is:", os.getcwd())
@@ -224,9 +229,16 @@ class Greeter(Node):
         msg_aud_note_vect.notes=self.constructNoteVector(notes)
         self.cmd_audio_publisher.publish(msg_aud_note_vect)
         #####################################
+        """
 
         
         self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
+
+        self.greeted_people = self.greeted_people + 1
+
+        if (self.greeted_people >= 3):
+            self.tts_engine.say("This was such an exciting mission. But now it is over. Goodbye.")
+            self.tts_engine.runAndWait()
         
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
