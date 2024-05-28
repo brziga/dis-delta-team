@@ -252,8 +252,8 @@ class Parking(Node):
         self.cylinder_position_y = 0.0
         
         # testing
-        thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0))
-        thread.start()
+        #thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0))
+        #thread.start()
         
     def receive_cylinder_marker(self, msg):
         if self.cylinder_spotted:
