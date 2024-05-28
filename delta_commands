@@ -35,7 +35,7 @@ github.com/vicoslab/dis_tutorial3
 // TASK 2 SETUP:
 ros2 launch dis_tutorial7 sim_turtlebot_nav.launch.py
 ros2 run dis_tutorial6 cylinder_segmentation
-ros2 run object_identifier cylinder_identifier.py
+ros2 run object_identifier cylinder_identifier
 ros2 run dis_tutorial7 arm_mover_actions.py
 ros2 run dis_tutorial6 parking_rings_detection.py
 ros2 run delta_parking delta_parking

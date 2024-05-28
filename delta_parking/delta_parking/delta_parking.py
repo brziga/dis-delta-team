@@ -244,9 +244,36 @@ class Parking(Node):
         self.marker_subscription = self.create_subscription(Marker, "/parking", self.receive_marker, 1)
         self.marker_subscription  # prevent unused variable warning
         
+        # for apporaching cylinder
+        self.cylinder_spotted = True
+        self.marker_subscription = self.create_subscription(Marker, "/detected_cylinder", self.receive_cylinder_marker, 1)
+        self.marker_subscription  # prevent unused variable warning
+        self.cylinder_position_x = 0.0
+        self.cylinder_position_y = 0.0
+        
         # testing
-        #thread = Thread(target=self.park_at_position, args=(-0.95, 1.55, 0.0))
-        #thread.start()
+        thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0))
+        thread.start()
+        
+    def receive_cylinder_marker(self, msg):
+        if self.cylinder_spotted:
+            return
+        
+        cylinder_map_position = [msg.pose.position.x, msg.pose.position.y]#
+        
+        robot_map_position = self.get_robot_world_position()
+        
+        distance_squared = self.squared_distance_between(robot_map_position[0], robot_map_position[1], cylinder_map_position[0], cylinder_map_position[1])
+        max_distance = 2.0
+        max_distance_squared = max_distance * max_distance
+        self.get_logger().info('cylinder at squared distance: %f' % (distance_squared))
+        if distance_squared > max_distance_squared:
+            return
+                
+        self.cylinder_position_x = cylinder_map_position[0]
+        self.cylinder_position_y = cylinder_map_position[1]
+        self.cylinder_spotted = True
+        self.get_logger().info('valid cylinder detected at (x: %f  y: %f)' % (self.cylinder_position_x, self.cylinder_position_y))
         
     def set_marker_colors(self, r, g, b):
         self.marker_color_r = r
@@ -256,13 +283,16 @@ class Parking(Node):
     def get_angle_to_detected_ring(self):
         if not self.spotted_ring:
             return None
-            
+        
+        return self.get_angle_to_world_position(self.spotted_ring_x, self.spotted_ring_y)
+        
+    def get_angle_to_world_position(self, x, y):
         robot_map_position = self.get_robot_world_position()
         robot_forward = self.transform_from_robot_to_map_frame_safe(1.0, 0.0)
         vector_robot_forward_x = robot_forward[0] - robot_map_position[0]
         vector_robot_forward_y = robot_forward[1] - robot_map_position[1]
-        vector_robot_ring_x = self.spotted_ring_x - robot_map_position[0]
-        vector_robot_ring_y = self.spotted_ring_y - robot_map_position[1]
+        vector_robot_ring_x = x - robot_map_position[0]
+        vector_robot_ring_y = y - robot_map_position[1]
         
         angle = self.angle_between(vector_robot_forward_x, vector_robot_forward_y, vector_robot_ring_x, vector_robot_ring_y)
         
@@ -270,10 +300,10 @@ class Parking(Node):
         p1 = self.transform_from_robot_to_map_frame_safe(0.0, 1.0)
         p2 = self.transform_from_robot_to_map_frame_safe(0.0, -1.0)
         
-        p1_ring_x = self.spotted_ring_x - p1[0]
-        p1_ring_y = self.spotted_ring_y - p1[1]
-        p2_ring_x = self.spotted_ring_x - p2[0]
-        p2_ring_y = self.spotted_ring_y - p2[1]
+        p1_ring_x = x - p1[0]
+        p1_ring_y = y - p1[1]
+        p2_ring_x = x - p2[0]
+        p2_ring_y = y - p2[1]
         
         dist1_squared = p1_ring_x * p1_ring_x + p1_ring_y * p1_ring_y
         dist2_squared = p2_ring_x * p2_ring_x + p2_ring_y * p2_ring_y
@@ -282,7 +312,6 @@ class Parking(Node):
             angle = -1.0 * angle
         
         return angle
-
 
     def publish_status(self):
         msg = JobStatus()
@@ -388,6 +417,28 @@ class Parking(Node):
         #self.approach_final_parking_spot(0.3)
         
         
+        # now going to cylinder
+        self.cylinder_spotted = False
+        while not self.cylinder_spotted:
+            self.get_logger().info('searching for cylinder...')
+            self.send_marker(position_x - 0.1, position_y, 1, 0.15, "searching_cylinder")
+            self.publish_arm_command()
+            self.rotate(1.0)
+        
+        self.get_logger().info('rotating to cylinder')
+        self.rotate(-self.get_angle_to_world_position(self.cylinder_position_x, self.cylinder_position_y))
+        self.cylinder_spotted = False
+        while not self.robot_is_close_to_point(self.cylinder_position_x, self.cylinder_position_y, 0.3):
+            self.get_logger().info('moving to cylinder')
+            robot_map_position = self.get_robot_world_position()
+            vector_robot_cylinder_x = self.cylinder_position_x - robot_map_position[0]
+            vector_robot_cylinder_y = self.cylinder_position_y - robot_map_position[1]
+            distance = math.sqrt(vector_robot_cylinder_x * vector_robot_cylinder_x + vector_robot_cylinder_y * vector_robot_cylinder_y)
+            self.move_forward(distance * 0.2)
+            self.get_logger().info('rotating to cylinder')
+            self.rotate(-self.get_angle_to_world_position(self.cylinder_position_x, self.cylinder_position_y))
+        
+        
         self.currently_parking = False
         self.spotted_ring = False
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
@@ -471,6 +522,10 @@ class Parking(Node):
         v2_u = self.unit_vector(v2)
         return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
         
+    def squared_distance_between(self, x1, y1, x2, y2):
+        v_x = x1 - x2
+        v_y = y1 - y2
+        return v_x * v_x + v_y * v_y
         
     def move_forward(self, distanceInMeters):
         self.rc.drive_forward(distanceInMeters)
