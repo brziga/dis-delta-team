@@ -20,13 +20,18 @@ from geometry_msgs.msg import PointStamped
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from builtin_interfaces.msg import Duration
 
+import numpy as np
+
 
 # structure to store the currently known level objects
 class CurrentLevelObjects:
-    def __init__(self, position_x, position_y, position_z, rotation, object_id, number_of_objects):
+    def __init__(self, position_x, position_y, position_z, p_x, p_y, p_z, rotation, object_id, number_of_objects):
         self.position_x = position_x
         self.position_y = position_y
         self.position_z = position_z
+        self.p_x = p_x
+        self.p_y = p_y
+        self.p_z = p_z
         self.rotation = rotation
         self.object_id = object_id
         self.number_of_objects = number_of_objects
@@ -36,7 +41,7 @@ class LevelObjectIdentifier(Node):
     def __init__(self):
         super().__init__('level_object_identifier')
         # initialize member variables
-        self.current_level_objects_ = CurrentLevelObjects([], [], [], [], [], 0)
+        self.current_level_objects_ = CurrentLevelObjects([], [], [], [], [], [], [], [], 0)
         self.personId = 1
         
         # creating the publisher and a timer to publish level objects regulary
@@ -70,11 +75,11 @@ class LevelObjectIdentifier(Node):
         # transforming marker position from robot frame to map frame
         map_position = self.transform_from_robot_to_map_frame(robot_frame_x, robot_frame_y, robot_frame_z, msg.header.stamp)
         if map_position is not None:
-            self.process_face_position_in_map_frame(map_position[0], map_position[1] ,map_position[2])
+            self.process_face_position_in_map_frame(map_position[0], map_position[1] ,map_position[2], robot_frame_y)
 
 
     # processes the position of a face that was spottet in the map coordinate frame at face_x, face_y, face_z
-    def process_face_position_in_map_frame(self, face_x, face_y ,face_z):
+    def process_face_position_in_map_frame(self, face_x, face_y ,face_z, robot_frame_y):
     
         # check if the new face is close to any of the known faces
         distance_threshold = 0.5
@@ -94,9 +99,28 @@ class LevelObjectIdentifier(Node):
                 # this face already exists!
                 self.get_logger().info('ALREADY KNOWN person detected at (map_frame): (x: %f  y: %f  z: %f)' % (face_x, face_y, face_z))
                 return
+
+        robot_map_position = self.transform_from_robot_to_map_frame_safe(0.0, 0.0)
+
+        robot_to_face_vector = [face_x - robot_map_position[0], face_y - robot_map_position[1]]
+        if np.linalg.norm(robot_to_face_vector) > 2.5:
+            self.get_logger().info('person too far away: ignoring this person')
+            return
+        
+        face_to_robot_vector = -self.unit_vector(robot_to_face_vector) * 0.3
+
+
+        p_x = face_x + face_to_robot_vector[0]
+        p_y = face_y + face_to_robot_vector[1]
+        p_z = 1.0
+
+        angle = self.angle_between(1.0, 0.0, robot_to_face_vector[0], robot_to_face_vector[1])
+        if (face_y < p_y):
+            angle = - angle
+        rotation = angle
                 
         # face is not close to any of the known faces -> it must be a new face!
-        self.insert_level_object(face_x, face_y, face_z, 0.0,"person_"+str(self.personId))
+        self.insert_level_object(face_x, face_y, face_z, p_x, p_y, p_z, rotation,"person_"+str(self.personId))
         self.personId = self.personId + 1
         self.get_logger().info('FOUND A NEW person detected at (map_frame): (x: %f  y: %f  z: %f)' % (face_x, face_y, face_z))
         
@@ -105,6 +129,47 @@ class LevelObjectIdentifier(Node):
         #       - Best might be not to set the face position itself as the object position, but a position about 1 meter before the face and
         #         with a rotation so that the robot faces the person when moving to the x,y,z,rot of the stored object
 
+    def unit_vector(self, vector):
+        return vector / np.linalg.norm(vector)
+
+    def angle_between(self, x1, y1, x2, y2):
+        v1 = (x1, y1)
+        v2 = (x2, y2)
+        v1_u = self.unit_vector(v1)
+        v2_u = self.unit_vector(v2)
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+    def transform_from_robot_to_map_frame_safe(self, x, y):
+        robot_map_position = None
+        while robot_map_position is None:
+            robot_map_position = self.transform_from_robot_to_map_frame1(x, y, 0.0)
+            if robot_map_position is None:
+                self.get_logger().info('failed to get robot map position. trying again')
+                time.sleep(1)
+        return robot_map_position
+
+    def transform_from_robot_to_map_frame1(self, robot_frame_x, robot_frame_y, robot_frame_z):
+
+        point_in_robot_frame = PointStamped()
+        point_in_robot_frame.header.frame_id = "/base_link"
+        point_in_robot_frame.header.stamp = self.get_clock().now().to_msg()
+        point_in_robot_frame.point.x = robot_frame_x
+        point_in_robot_frame.point.y = robot_frame_y
+        point_in_robot_frame.point.z = robot_frame_z
+
+        time_now = rclpy.time.Time()
+        timeout = rclpy.duration.Duration(seconds=0.1)
+
+        try:
+            trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
+            point_in_map_frame = tfg.do_transform_point(point_in_robot_frame, trans)
+            map_frame_x = point_in_map_frame.point.x
+            map_frame_y = point_in_map_frame.point.y
+            map_frame_z = point_in_map_frame.point.z
+            return [map_frame_x, map_frame_y, map_frame_z]
+        except TransformException as te:
+            self.get_logger().info(f"Cound not get the transform: {te}")
+            return None
 
     # trys to transfer the given point from robot frame to map frame.
     # Returns the array [map_frame_x, map_frame_y, map_frame_z]. If it can not succeede it returns None
@@ -116,10 +181,11 @@ class LevelObjectIdentifier(Node):
         point_in_robot_frame.point.y = robot_frame_y
         point_in_robot_frame.point.z = robot_frame_z
         
+        time_now = rclpy.time.Time()
         timeout = rclpy.duration.Duration(seconds=0.1)
 
         try:
-            trans = self.tf_buffer.lookup_transform("map", "base_link", header_stamp, timeout)
+            trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
             point_in_map_frame = tfg.do_transform_point(point_in_robot_frame, trans)
             map_frame_x = point_in_map_frame.point.x
             map_frame_y = point_in_map_frame.point.y
@@ -131,7 +197,7 @@ class LevelObjectIdentifier(Node):
 
 
     # inserts the given level object into the set of known level objects
-    def insert_level_object(self, object_position_x, object_position_y, object_position_z, object_rotation, object_id):
+    def insert_level_object(self, object_position_x, object_position_y, object_position_z, p_x, p_y, p_z, object_rotation, object_id):
         # getting pointer to current level objects
         old_current_level_objects = self.current_level_objects_
         # creating a new CurrentLevelObjects object for the member variable 'current_level_objects_'
@@ -139,6 +205,9 @@ class LevelObjectIdentifier(Node):
             old_current_level_objects.position_x + [object_position_x],
             old_current_level_objects.position_y + [object_position_y],
             old_current_level_objects.position_z + [object_position_z],
+            old_current_level_objects.p_x + [p_x],
+            old_current_level_objects.p_y + [p_y],
+            old_current_level_objects.p_z + [p_z],
             old_current_level_objects.rotation + [object_rotation],
             old_current_level_objects.object_id + [object_id],
             old_current_level_objects.number_of_objects + 1
@@ -152,9 +221,9 @@ class LevelObjectIdentifier(Node):
         # getting pointer to current_level_objects before publishing, in case the object is exchanged while building the message
         current_level_objects = self.current_level_objects_
         msg = LevelObjects() # creating msg of type LevelObjects interface (see import above: from delta_interfaces.msg import LevelObjects)
-        msg.position_x = current_level_objects.position_x
-        msg.position_y = current_level_objects.position_y
-        msg.position_z = current_level_objects.position_z
+        msg.position_x = current_level_objects.p_x
+        msg.position_y = current_level_objects.p_y
+        msg.position_z = current_level_objects.p_z
         msg.rotation = current_level_objects.rotation
         msg.id = current_level_objects.object_id
         msg.number_of_objects = current_level_objects.number_of_objects
