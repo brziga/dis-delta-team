@@ -79,6 +79,8 @@ class CylinderObjectIdentifier(Node):
 
         if b < 5 and r > 75 and g > 75:
             return "yellow"
+        elif r < 10 and g < 10 and b < 10:
+            return "black"
         elif max([r,g,b]) == r:
             return "red"
         elif max([r,g,b]) == g:
@@ -248,6 +250,10 @@ class CylinderObjectIdentifier(Node):
             r = 0.0
             g = 0.0
             b = 255.0
+        elif color == "black":
+            r = 0.0
+            g = 0.0
+            b = 0.0
 
         marker.color.r = r
         marker.color.g = g
