@@ -72,14 +72,16 @@ class LevelObjectIdentifier(Node):
         robot_frame_y = msg.pose.position.y
         robot_frame_z = msg.pose.position.z
         
+        is_mona_lisa = msg.color.r == 0.0 and msg.color.g == 0.0 and msg.color.b == 0.0
+        
         # transforming marker position from robot frame to map frame
         map_position = self.transform_from_robot_to_map_frame(robot_frame_x, robot_frame_y, robot_frame_z, msg.header.stamp)
         if map_position is not None:
-            self.process_face_position_in_map_frame(map_position[0], map_position[1] ,map_position[2], robot_frame_y)
+            self.process_face_position_in_map_frame(map_position[0], map_position[1] ,map_position[2], robot_frame_y, is_mona_lisa)
 
 
     # processes the position of a face that was spottet in the map coordinate frame at face_x, face_y, face_z
-    def process_face_position_in_map_frame(self, face_x, face_y ,face_z, robot_frame_y):
+    def process_face_position_in_map_frame(self, face_x, face_y ,face_z, robot_frame_y, is_mona_lisa):
     
         # check if the new face is close to any of the known faces
         distance_threshold = 0.5
@@ -120,7 +122,10 @@ class LevelObjectIdentifier(Node):
         rotation = angle
                 
         # face is not close to any of the known faces -> it must be a new face!
-        self.insert_level_object(face_x, face_y, face_z, p_x, p_y, p_z, rotation,"person_"+str(self.personId))
+        id_string = "person_"
+        if is_mona_lisa:
+            id_string = "monalisa_"
+        self.insert_level_object(face_x, face_y, face_z, p_x, p_y, p_z, rotation, id_string + str(self.personId))
         self.personId = self.personId + 1
         self.get_logger().info('FOUND A NEW person detected at (map_frame): (x: %f  y: %f  z: %f)' % (face_x, face_y, face_z))
         
@@ -238,13 +243,20 @@ class LevelObjectIdentifier(Node):
             y = self.current_level_objects_.position_y[i]
             object_id = self.current_level_objects_.object_id[i]
             
-            self.send_marker(x, y, 2 * i + 1000)
-            self.send_marker(x - 0.15, y, 2 * i + 1000 + 1, 0.15, object_id)
+            if "person" in self.current_level_objects_.object_id[i]:
+                self.send_marker(x, y, 2 * i + 1000)
+                self.send_marker(x - 0.15, y, 2 * i + 1000 + 1, 0.15, object_id)
+            else:
+                r = 0.8
+                g = 0.0
+                b = 0.0
+                self.send_marker(x, y, 2 * i + 1000, 0.1, "", r, g, b)
+                self.send_marker(x - 0.15, y, 2 * i + 1000 + 1, 0.15, object_id, r, g, b)
         
         
         
         # send marker when a new level object is discovered
-    def send_marker(self, x, y, marker_id, scale = 0.1, text = ""):
+    def send_marker(self, x, y, marker_id, scale = 0.1, text = "", r = 1.0, g = 0.3, b = 0.0):
         point_in_map_frame = PointStamped()
         point_in_map_frame.header.frame_id = "/map"
         point_in_map_frame.header.stamp = self.get_clock().now().to_msg()
@@ -253,11 +265,11 @@ class LevelObjectIdentifier(Node):
         point_in_map_frame.point.y = y
         point_in_map_frame.point.z = 1.0
         
-        marker = self.create_marker(point_in_map_frame, marker_id, scale, text)
+        marker = self.create_marker(point_in_map_frame, marker_id, scale, text, r, g, b)
         self.marker_pub.publish(marker)
             
             
-    def create_marker(self, point_stamped, marker_id, scale, text):
+    def create_marker(self, point_stamped, marker_id, scale, text, r, g, b):
         marker = Marker()
 
         marker.header = point_stamped.header
@@ -279,9 +291,9 @@ class LevelObjectIdentifier(Node):
         marker.scale.z = scale
 
         # Set the color
-        marker.color.r = 1.0
-        marker.color.g = 0.3
-        marker.color.b = 0.0
+        marker.color.r = r
+        marker.color.g = g
+        marker.color.b = b
         marker.color.a = 1.0
 
         # Set the pose of the marker

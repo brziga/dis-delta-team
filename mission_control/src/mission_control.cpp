@@ -75,6 +75,7 @@ class MissionController : public rclcpp::Node {
     } _levelObjects;
     mutable map<string, bool> _knownLevelObjectIds = {};
     mutable vector<string> _peopleStillToGreetIds;
+    mutable vector<string> _monaLisaStillToCheckIds;
     // ring objects
     rclcpp::Subscription<delta_interfaces::msg::RingObjects>::SharedPtr _ringObjectsSuscription;
     mutable map<string, bool> _knownRingObjectIds = {};
@@ -334,6 +335,10 @@ class MissionController : public rclcpp::Node {
         return _peopleStillToGreetIds.size() > 0;
     }
     
+    bool knowMonaLisaToCheck() {
+        return _monaLisaStillToCheckIds.size() > 0;
+    }
+    
     string popPersonToGreetAndReturnId() {
         if (!needToGreet()) RCLCPP_INFO(this->get_logger(), "ERROR: sendGreeterJob() was called but there are no people left in _peopleStillToGreetIds");
         
@@ -342,6 +347,15 @@ class MissionController : public rclcpp::Node {
         _peopleStillToGreetIds.pop_back();  //.erase(lastIndex);
         
         return personToGreetId;
+    }
+    
+    string popMonaLisaToCheckAndReturnId() {
+        if (!knowMonaLisaToCheck()) RCLCPP_INFO(this->get_logger(), "ERROR: _monaLisaStillToCheckIds is empty. can not get next mona lisa");
+        
+        string monaLisaToCheckId = _monaLisaStillToCheckIds.back(); //[lastIndex];
+        _monaLisaStillToCheckIds.pop_back();  //.erase(lastIndex);
+        
+        return monaLisaToCheckId;
     }
     
     void sendGreeterJob() {
@@ -412,8 +426,14 @@ class MissionController : public rclcpp::Node {
           if (_knownLevelObjectIds.count(id) == 0) { // check if _knownLevelObjectIds is not containing msg.id[i] yet
               _knownLevelObjectIds[id] = true; // add to map to keep track which object ids are known already
               
-              // all objects are people for now
-              _peopleStillToGreetIds.push_back(id); // add it to list of people that the robot still needs to greet
+              
+              if (id.find("person") != std::string::npos) { // 'person' is part of the id
+                  _peopleStillToGreetIds.push_back(id); // add it to list of people that the robot still needs to greet
+              } else {
+                  // it must be a mona lisa! wow!!!
+                  _monaLisaStillToCheckIds.push_back(id);
+                  
+              }
               
               _levelObjects.x.push_back(msg.position_x[i]); // add unknown level object to all level objects
               _levelObjects.y.push_back(msg.position_y[i]);
@@ -421,7 +441,6 @@ class MissionController : public rclcpp::Node {
               _levelObjects.rot.push_back(msg.rotation[i]);
               _levelObjects.id.push_back(msg.id[i]);
               _levelObjects.numberOfObjects++;
-              
               nothingNew = false;
           }
       }
