@@ -21,6 +21,7 @@ using namespace std;
 #include "delta_interfaces/msg/greeter_job.hpp"
 #include "delta_interfaces/msg/explorer_job.hpp"
 #include "delta_interfaces/msg/parking_job.hpp"
+#include "delta_interfaces/msg/monalisa_job.hpp"
 
 
 enum MissionStatus { ready, continueExploring, stopExploring, greetingPerson, parking };
@@ -53,6 +54,9 @@ class MissionController : public rclcpp::Node {
       
       // sending explorer jobs
       _explorerJobPublisher = this->create_publisher<delta_interfaces::msg::ExplorerJob>("explorer_job", 1);
+      
+      // sending ml_identifier jobs
+      _mlJobPublisher = this->create_publisher<delta_interfaces::msg::MonalisaJob>("monalisa_job", 1);
       
       _decisionTimer = this->create_wall_timer(500ms, std::bind(&MissionController::makeDecision, this));
       
@@ -98,6 +102,9 @@ class MissionController : public rclcpp::Node {
     
     // explorer stuff
     rclcpp::Publisher<delta_interfaces::msg::ExplorerJob>::SharedPtr _explorerJobPublisher;
+    
+    // mona lisa check stuff
+    rclcpp::Publisher<delta_interfaces::msg::MonalisaJob>::SharedPtr _mlJobPublisher;
     
     // greeting stuff
     const int _peopleToGreetForVictory = 3;
@@ -396,6 +403,13 @@ class MissionController : public rclcpp::Node {
         message.explore = explore;
         message.job_id = _sentJobId;
         _explorerJobPublisher->publish(message);
+    }
+    
+    void sendMonalisaJob(bool scanQr) {
+        auto message = delta_interfaces::msg::MonalisaJob();
+        message.scan_qr = scanQr;
+        message.job_id = _sentJobId;
+        _mlJobPublisher->publish(message);
     }
     
     void receiveJobStatusUpdate(const delta_interfaces::msg::JobStatus & msg) const {
