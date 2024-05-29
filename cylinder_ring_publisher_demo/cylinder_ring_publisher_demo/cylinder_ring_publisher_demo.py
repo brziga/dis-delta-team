@@ -23,7 +23,7 @@ class PubDemo(Node):
         ring_msg = RingObjects()
         ring_msg.position_x = [-1.1, -1.1, 1.1, 2.7]
         ring_msg.position_y = [0.25, 3.0, 1.0, -1.7]
-        ring_msg.position_z = [1.0 1.0, 1.0, 1.0]
+        ring_msg.position_z = [1.0, 1.0, 1.0, 1.0]
         ring_msg.color = ["black", "blue", "red", "green"]
         ring_msg.id = ["ring_1", "ring_2", "ring_3", "ring_4"]
         self.ring_publisher.publish(ring_msg)
