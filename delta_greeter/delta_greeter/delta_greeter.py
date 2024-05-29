@@ -8,7 +8,7 @@ from threading import Thread
 import time
 import os
 import pyttsx3
-import librosa
+#import librosa
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -160,6 +160,7 @@ class Greeter(Node):
         self.tts_engine.setProperty("rate", 160) # default rate is 200; subtracting 40 seems to sound better
 
         self.cmd_audio_publisher = self.create_publisher(AudioNoteVector, "/cmd_audio", 1)
+        
 
     def publish_status(self):
         msg = JobStatus()
@@ -176,11 +177,11 @@ class Greeter(Node):
             self.currently_executing_job = True
             self.publish_status()
 
-        thread = Thread(target=self.greet_a_person, args=(msg.position_x, msg.position_y, msg.position_z, msg.rotation, msg.person_id))
+        thread = Thread(target=self.greet_a_person, args=(msg.position_x, msg.position_y, msg.position_z, msg.rotation, msg.person_id, msg.talk_to_person))
         thread.start()
         
     
-    def greet_a_person(self, position_x, position_y, position_z, rotation, person_id):
+    def greet_a_person(self, position_x, position_y, position_z, rotation, person_id, talk_to_person):
             
         person_id = int(person_id.split("_")[-1])
 
@@ -195,34 +196,26 @@ class Greeter(Node):
                 self.send_marker(position_x - 0.1, position_y, 1, 0.15, "greet_person_nav_goal")
                 
                 
-        # greeting the person
-        # ...in command line
-        self.get_logger().info('.__________________________________________.')
-        self.get_logger().info('|                                          |')
-        self.get_logger().info('|                                          |')
-        self.get_logger().info('|                                          |')
-        self.get_logger().info('|        Dober dan, person {:2d}     :)       |'.format(person_id))
-        self.get_logger().info('|                                          |')
-        self.get_logger().info('|                                          |')
-        self.get_logger().info('|                                          |')
-        self.get_logger().info('.__________________________________________.')
-        # ...and vocally
-        self.tts_engine.say("Hello person {:2d}! Have a nice day!".format(person_id))
-        self.tts_engine.save_to_file("Hello person {:2d}! Have a nice day!".format(person_id), "greeting_audio_clip.wav")
-        # print("Current working directory is:", os.getcwd())
-        self.tts_engine.runAndWait()
-        notes = self.makeNoteArrayFromAudioFile("greeting_audio_clip.wav")
-        msg_aud_note_vect = AudioNoteVector()
-        msg_aud_note_vect.append=False
-        msg_aud_note_vect.notes=self.constructNoteVector(notes)
-        self.cmd_audio_publisher.publish(msg_aud_note_vect)
+        if not talk_to_person:
+            self.currently_executing_job = False
+            self.publish_status()
+            return
         
-        self.send_marker(position_x - 0.3, position_y, 2, 0.25, "dober_dan_person!_:)")
+        
+        self.send_marker(position_x - 0.3, position_y, 2, 0.25, "talking_to_person")
+        
+        self.sayText("Hello human. Can you tell me the color of the ring where I have to park?")
+        
+        # TODO: speech recognition
         
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
         self.publish_status()
+        
+    def sayText(self, text):
+        self.tts_engine.say(text)
+        self.tts_engine.runAndWait()
     
     def makeNoteArrayFromAudioFile(self, audiofilename):
         y, sr = librosa.load(audiofilename)

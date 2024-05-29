@@ -527,8 +527,8 @@ class MissionController : public rclcpp::Node {
             if (_myStatus == checkMonalisa) {
                 if (msg.result_bool) {
                     RCLCPP_INFO(this->get_logger(), ">>> MISSION COMPLETE <<<");
-                    _textsToSay.insert(_textsToSay.begin(), "It is her. The one and only mona lisa! I can finally steal it. Hahaha!");
-                    _textsToSay.insert(_textsToSay.begin(), "This was such an exciting mission! I still remember when I met person one and was like hello person one. And later during the parking I got so nervous. But everything worked out perfectly. So now it is time to say goodbye. Goodbye.");
+                    _textsToSay.insert(_textsToSay.begin(), "It is HER. The ONE and ONLY mona lisa! I can finally steal her. Ha ha ha!");
+                    _textsToSay.insert(_textsToSay.begin(), "This was such an exciting mission! I still remember when I met PERSON ONE. I said. hello PERSON ONE. And later during the parking I got so nervous. But everything worked out perfectly. So now it is time to say goodbye. Goodbye.");
                     _missionComplete = true;
                 }
             }
