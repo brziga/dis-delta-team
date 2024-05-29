@@ -72,7 +72,7 @@ class LevelObjectIdentifier(Node):
         robot_frame_y = msg.pose.position.y
         robot_frame_z = msg.pose.position.z
         
-        is_mona_lisa = msg.color.r == 0.0 and msg.color.g == 0.0 and msg.color.b == 0.0
+        is_mona_lisa = msg.color.r == 1.0 and msg.color.g == 0.0 and msg.color.b == 0.0
         
         # transforming marker position from robot frame to map frame
         map_position = self.transform_from_robot_to_map_frame(robot_frame_x, robot_frame_y, robot_frame_z, msg.header.stamp)
