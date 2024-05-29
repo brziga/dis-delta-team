@@ -8,7 +8,7 @@ from sensor_msgs.msg import Image, PointCloud2
 from sensor_msgs_py import point_cloud2 as pc2
 from builtin_interfaces.msg import Duration
 
-
+import os
 from visualization_msgs.msg import Marker
 
 from cv_bridge import CvBridge, CvBridgeError
@@ -50,7 +50,29 @@ class detect_faces(Node):
 		self.monalisas = []
 		self.marker_id = 0
 
+		script_dir = os.path.dirname(__file__)
+		print(script_dir)
+		print(script_dir)
+		print(script_dir)
+		print(script_dir)
+		print(script_dir)
+		rel_path = "../../../../src/dis_tutorial3/scripts/mona.png"
+		abs_file_path = os.path.join(script_dir, rel_path)
+		self.reference_image = cv2.imread(abs_file_path)
+		self.reference_hist = self.calculate_histogram(self.reference_image)
+
 		self.get_logger().info(f"Node has been initialized! Will publish face markers to {marker_topic}.")
+
+
+	def calculate_histogram(self, image):
+		hist = cv2.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+		cv2.normalize(hist, hist)
+		return hist
+
+	def compare_histograms(self, hist1, hist2):
+		return cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL)
+
+
 
 	def rgb_callback(self, data):
 
@@ -86,6 +108,21 @@ class detect_faces(Node):
 
 				
 				roi = cv_image[int(bbox[1]):int(bbox[3]), int(bbox[0]):int(bbox[2])]
+				
+				if roi.size == 0:
+					self.get_logger().warning("Empty ROI, skipping this detection.")
+					continue
+
+				self.get_logger().info(f"ROI shape: {roi.shape}")
+
+				roi_hist = self.calculate_histogram(roi)
+
+				roi_hist = self.calculate_histogram(roi)
+				if roi_hist is None:
+					self.get_logger().warning("Failed to calculate histogram for ROI, skipping this detection.")
+					continue
+				similarity = self.compare_histograms(self.reference_hist, roi_hist)
+				self.get_logger().info(f"Histogram similarity: {similarity}")
 
 				avg_b = np.mean(roi[:, :, 0])
 				avg_g = np.mean(roi[:, :, 1])
@@ -96,7 +133,7 @@ class detect_faces(Node):
 
 				cv2.imshow("ROI", roi)
 
-				if avg_rgb < 80:
+				if similarity > 0.22:# and avg_rgb < 70:
 					self.monalisas.append((cx,cy))
 				else:
 					self.faces.append((cx,cy))
