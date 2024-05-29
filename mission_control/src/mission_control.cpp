@@ -24,7 +24,7 @@ using namespace std;
 #include "delta_interfaces/msg/monalisa_job.hpp"
 
 
-enum MissionStatus { ready, continueExploring, stopExploring, greetingPerson, parking };
+enum MissionStatus { ready, continueExploring, stopExploring, greetingPerson, parking, scanningQr, approachingMonalisa, checkMonalisa };
 
 class MissionController : public rclcpp::Node {
   public:
@@ -97,6 +97,19 @@ class MissionController : public rclcpp::Node {
     mutable string _sentJobId = ""; // the id of the job that was last sent
     mutable int _jobCounter = 0; // makes sure each job has an individual id
     
+    // task 3
+    mutable bool _ringColorKnown = false;
+    mutable string _ringColor = "";
+    mutable bool _cylinderApproached = false;
+    mutable bool _qrCodeScanned = false;
+    mutable map<string, double> _knownRingCoordinateX = {};
+    mutable map<string, double> _knownRingCoordinateY = {};
+    mutable int _answerCountGreen = 0;
+    mutable int _answerCountRed = 0;
+    mutable int _answerCountBlue = 0;
+    mutable int _answerCountBlack = 0;
+    mutable bool _missionComplete = false;
+    
     // getting job status updates
     rclcpp::Subscription<delta_interfaces::msg::JobStatus>::SharedPtr _jobStatusSuscription;
     
@@ -104,11 +117,10 @@ class MissionController : public rclcpp::Node {
     rclcpp::Publisher<delta_interfaces::msg::ExplorerJob>::SharedPtr _explorerJobPublisher;
     
     // mona lisa check stuff
+    mutable string _nextMonalisaToCheckId = "";
     rclcpp::Publisher<delta_interfaces::msg::MonalisaJob>::SharedPtr _mlJobPublisher;
     
     // greeting stuff
-    const int _peopleToGreetForVictory = 3;
-    mutable int _greetedPeople = 0;
     mutable string _nextPersonToGreetId = "";
     rclcpp::Publisher<delta_interfaces::msg::GreeterJob>::SharedPtr _greeterJobPublisher;
     
@@ -116,17 +128,8 @@ class MissionController : public rclcpp::Node {
     mutable double _nextParkPositionX = 0;
     mutable double _nextParkPositionY = 0;
     rclcpp::Publisher<delta_interfaces::msg::ParkingJob>::SharedPtr _parkingJobPublisher;
-    
-    // task2: counting rings and cylinders
-    const int _ringsToGreet = 3;
-    const int _cylindersToGreet = 3;
-    mutable int _greetedRings = 0;
-    mutable int _greetedCylinders = 0;
-    mutable bool _greenRingDetected = false;
-    mutable double _greenRingPositionX = 0;
-    mutable double _greenRingPositionY = 0;
-    
-    
+
+
     void initNewJobId() {
         _sentJobId = "mission_control_job"+ to_string(_jobCounter);
         _jobCounter++;
@@ -144,30 +147,34 @@ class MissionController : public rclcpp::Node {
             sendSayTextMsg(text);
         }
         
-        // check if task 1 mission is complete
-        if(missionComplete()) {
-            displayVictoryText();
-            _decisionTimer->cancel();
+        if (_missionComplete) {
+            //_decisionTimer->cancel();
             return;
         }
         
         
-        //RCLCPP_INFO(this->get_logger(), "servant - received job: '%d'", _servantReceivedJob);
-        //RCLCPP_INFO(this->get_logger(), "servant - has finished job: '%d'", _servantHasFinishedJob);
-        
         // the robot is ready to perform the next best action
         if (_myStatus == ready) {
 
-            if (needToGreet()) {
-                // need to greet someone!
+            if (personToGreetAvailable() && !_ringColorKnown) {
+                // need to greet people to know ring color
                 switchStatus(greetingPerson);
                 
-            } else if (needToParkUnderGreenRing()) {
-                // need to park
-                _nextParkPositionX = _greenRingPositionX;
-                _nextParkPositionY = _greenRingPositionY;
+            } else if (_ringColorKnown && !_cylinderApproached && _knownRingCoordinateY.count(_ringColor) != 0) {
+                // need to park and aproach cylinder
+                _nextParkPositionX = _knownRingCoordinateX[_ringColor];
+                _nextParkPositionY = _knownRingCoordinateY[_ringColor];
                 switchStatus(parking);
-            } else {
+                
+            } else if (_cylinderApproached && !_qrCodeScanned) {
+                // need to scan qr code now
+                switchStatus(scanningQr);
+                
+            } else if (_qrCodeScanned && knowMonaLisaToCheck()) {
+                // check next mona lisa
+                switchStatus(approachingMonalisa);
+                
+            }else {
                 // i dont need to do anything else so i go exlore =)
                 switchStatus(continueExploring);
             }
@@ -189,14 +196,24 @@ class MissionController : public rclcpp::Node {
             
             // the robot is exploring right now
             } else {
-                if (needToGreet()) {
+                if (personToGreetAvailable() && !_ringColorKnown) {
                     // robot has to greet -> switch to stop exploration status
-                    RCLCPP_INFO(this->get_logger(), "continueExploring : need to greet someone, stopping exploration");
+                    RCLCPP_INFO(this->get_logger(), "continueExploring : need to greet someone to find out ring color, stopping exploration");
                     switchStatus(stopExploring);
                 
-                } else if (needToParkUnderGreenRing()) {
-                    // robot has to park under green ring -> switch to stop exploration status
-                    RCLCPP_INFO(this->get_logger(), "continueExploring : need to park under green ring, stopping exploration");
+                } else if (_ringColorKnown && !_cylinderApproached) {
+                    // robot has to park and approach cylinder -> switch to stop exploration status
+                    RCLCPP_INFO(this->get_logger(), "continueExploring : need to park and approach cylinder, stopping exploration");
+                    switchStatus(stopExploring);
+                    
+                } else if (_cylinderApproached && !_qrCodeScanned) {
+                    // robot has to scan the qr code now -> switch to stop exploration status
+                    RCLCPP_INFO(this->get_logger(), "continueExploring : need scan qr code now, stopping exploration");
+                    switchStatus(stopExploring);
+                    
+                } else if (_qrCodeScanned && knowMonaLisaToCheck()) {
+                    // robot has to check the next mona lisa -> switch to stop exploration status
+                    RCLCPP_INFO(this->get_logger(), "continueExploring : need to check out next mona lisa now, stopping exploration");
                     switchStatus(stopExploring);
                     
                 // the robot is exploring as it should. nothing to do here
@@ -244,7 +261,6 @@ class MissionController : public rclcpp::Node {
             } else {
                 // greeter is done. ready for new task
                 RCLCPP_INFO(this->get_logger(), "greetingPerson : greeting finished. getting ready for new task");
-                _greetedPeople++;
                 switchStatus(ready);
             }
         }
@@ -264,21 +280,71 @@ class MissionController : public rclcpp::Node {
                 // give delta_parking time to park
                 RCLCPP_INFO(this->get_logger(), "parking : waiting for delta_parker to park");
                 
-            } else {
-                // for task 2 we are done now. so we can exit here.
-                RCLCPP_INFO(this->get_logger(), " >>> PARKING DONE, TASK 2 COMPLETE <<<");
-                _decisionTimer->cancel();
-                return;
-                
+            } else {                
                 // parking is done. ready for new task
                 RCLCPP_INFO(this->get_logger(), "parking : finished. getting ready for new task");
+                _cylinderApproached = true;
                 switchStatus(ready);
             }
         }
-    }
-    
-    bool missionComplete() {
-        return _greetedPeople >= _peopleToGreetForVictory;
+        
+        else if (_myStatus == scanningQr) {
+            // has not received job yet -> sending job
+            if (!_servantReceivedJob) {
+                RCLCPP_INFO(this->get_logger(), "scanningQr : sending job");
+                sendMonalisaJob(true);
+            }
+            
+            // has already received job but not finished yet
+            else if (!_servantHasFinishedJob) {
+                // wait till scan finished
+                RCLCPP_INFO(this->get_logger(), "scanningQr : waiting for scan to finish");
+                
+            } else {
+                // sacnning done. ready for new task
+                RCLCPP_INFO(this->get_logger(), "scanningQr : finished. getting ready for new task");
+                _qrCodeScanned = true;
+                switchStatus(ready);
+            }
+        }
+        
+        else if (_myStatus == approachingMonalisa) {
+            // has not received job yet -> sending job
+            if (!_servantReceivedJob) {
+                RCLCPP_INFO(this->get_logger(), "approachingMonalisa : sending job");
+                sendApproachMonaLisaJob();
+            }
+            
+            // has already received job but not finished yet
+            else if (!_servantHasFinishedJob) {
+                // wait till scan finished
+                RCLCPP_INFO(this->get_logger(), "approachingMonalisa : waiting for finish");
+                
+            } else {
+                // sacnning done. ready for new task
+                RCLCPP_INFO(this->get_logger(), "approachingMonalisa : finished. getting ready for new task");
+                switchStatus(checkMonalisa);
+            }
+        }
+        
+        else if (_myStatus == checkMonalisa) {
+            // has not received job yet -> sending job
+            if (!_servantReceivedJob) {
+                RCLCPP_INFO(this->get_logger(), "checkMonalisa : sending job");
+                sendMonalisaJob(false);
+            }
+            
+            // has already received job but not finished yet
+            else if (!_servantHasFinishedJob) {
+                // wait till scan finished
+                RCLCPP_INFO(this->get_logger(), "checkMonalisa : waiting for finish");
+                
+            } else {
+                // sacnning done. ready for new task
+                RCLCPP_INFO(this->get_logger(), "checkMonalisa : finished. getting ready for new task");
+                switchStatus(ready);
+            }
+        }
     }
     
     void sayText(string textToSay) {
@@ -289,26 +355,6 @@ class MissionController : public rclcpp::Node {
         auto message = delta_interfaces::msg::SayText();
         message.text = textToSay;
         _sayTextPublisher->publish(message);
-    }
-    
-    void displayVictoryText() {
-        RCLCPP_INFO(this->get_logger(), "I greeted all %s people. My mission is complete!!!", to_string(_peopleToGreetForVictory).c_str());
-        sleep(5);
-        RCLCPP_INFO(this->get_logger(), "I am so proud :,)");
-        sleep(3);
-        RCLCPP_INFO(this->get_logger(), "Wish my robo mum could see this");
-        sleep(4);
-        RCLCPP_INFO(this->get_logger(), "But she...");
-        sleep(1);
-        RCLCPP_INFO(this->get_logger(), "was...");
-        sleep(2);
-        RCLCPP_INFO(this->get_logger(), "...recycled into a toaster");
-        sleep(4);
-        RCLCPP_INFO(this->get_logger(), " ");
-        sleep(2);
-        RCLCPP_INFO(this->get_logger(), "Life is cruel.");
-        sleep(5);
-        RCLCPP_INFO(this->get_logger(), "Leave me alone now please");
     }
     
     void switchStatus(MissionStatus newStatus) {
@@ -330,15 +376,32 @@ class MissionController : public rclcpp::Node {
             initNewJobId();
             _nextPersonToGreetId = popPersonToGreetAndReturnId();
             RCLCPP_INFO(this->get_logger(), "greetingPerson : sending job");
-            sendGreeterJob();
+            sendGreeterJob()
+            ;
         } else if (newStatus == parking) {
             initNewJobId();
             RCLCPP_INFO(this->get_logger(), "parking : sending job");
             sendParkingJob();
+            
+        } else if(newStatus == scanningQr) {
+            initNewJobId();
+            RCLCPP_INFO(this->get_logger(), "scanningQr : sending job");
+            sendMonalisaJob(true);
+            
+        } else if (newStatus == approachingMonalisa) {
+            initNewJobId();
+            _nextMonalisaToCheckId = popMonaLisaToCheckAndReturnId();
+            RCLCPP_INFO(this->get_logger(), "approachingMonalisa : sending job");
+            sendApproachMonaLisaJob();
+        
+        } else if(newStatus == checkMonalisa) {
+            initNewJobId();
+            RCLCPP_INFO(this->get_logger(), "checkMonalisa : sending job");
+            sendMonalisaJob(false);
         }
     }
     
-    bool needToGreet() {
+    bool personToGreetAvailable() {
         return _peopleStillToGreetIds.size() > 0;
     }
     
@@ -347,7 +410,7 @@ class MissionController : public rclcpp::Node {
     }
     
     string popPersonToGreetAndReturnId() {
-        if (!needToGreet()) RCLCPP_INFO(this->get_logger(), "ERROR: sendGreeterJob() was called but there are no people left in _peopleStillToGreetIds");
+        if (!personToGreetAvailable()) RCLCPP_INFO(this->get_logger(), "ERROR: there are no people left in _peopleStillToGreetIds");
         
         //int lastIndex = _peopleStillToGreetIds.size() - 1; // get and remove last element
         string personToGreetId = _peopleStillToGreetIds.back(); //[lastIndex];
@@ -376,6 +439,25 @@ class MissionController : public rclcpp::Node {
             message.rotation = _levelObjects.rot[i];
             message.job_id = _sentJobId;
             message.person_id = _nextPersonToGreetId;
+            message.talk_to_person = true;
+            _greeterJobPublisher->publish(message);
+            return;
+        }
+        RCLCPP_INFO(this->get_logger(), "ERROR: person that has to be greeted is not in the list of all level object");
+    }
+    
+    void sendApproachMonaLisaJob() {
+        for (int i = 0; i < _levelObjects.numberOfObjects; i++) {
+            if (_levelObjects.id[i] != _nextMonalisaToCheckId) continue;
+            
+            auto message = delta_interfaces::msg::GreeterJob();
+            message.position_x = _levelObjects.x[i];
+            message.position_y = _levelObjects.y[i];
+            message.position_z = _levelObjects.z[i];
+            message.rotation = _levelObjects.rot[i];
+            message.job_id = _sentJobId;
+            message.person_id = _nextMonalisaToCheckId;
+            message.talk_to_person = false;
             _greeterJobPublisher->publish(message);
             return;
         }
@@ -420,7 +502,37 @@ class MissionController : public rclcpp::Node {
         }
         
         // the job has arrived and is eighter not processed anymore -> finished
-        if (msg.job_id == _sentJobId && (!msg.acting)) {
+        if (msg.job_id == _sentJobId && (!msg.acting) && !_servantHasFinishedJob) {
+            
+            if (_myStatus == greetingPerson) {
+                if (msg.result_string1 == "green" || msg.result_string2 == "green") _answerCountGreen++;
+                if (msg.result_string1 == "red" || msg.result_string2 == "red") _answerCountRed++;
+                if (msg.result_string1 == "blue" || msg.result_string2 == "blue") _answerCountBlue++;
+                if (msg.result_string1 == "black" || msg.result_string2 == "black") _answerCountBlack++;
+                if (_answerCountGreen >= 2) {
+                    _ringColorKnown = true;
+                    _ringColor = "green";
+                } else if (_answerCountRed >= 2) {
+                    _ringColorKnown = true;
+                    _ringColor = "red";
+                } else if (_answerCountBlue >= 2) {
+                    _ringColorKnown = true;
+                    _ringColor = "blue";
+                } else if (_answerCountBlack >= 2) {
+                    _ringColorKnown = true;
+                    _ringColor = "black";
+                }
+            }
+            
+            if (_myStatus == checkMonalisa) {
+                if (msg.result_bool) {
+                    RCLCPP_INFO(this->get_logger(), ">>> MISSION COMPLETE <<<");
+                    _textsToSay.insert(_textsToSay.begin(), "It is her. The one and only mona lisa! I can finally steal it. Hahaha!");
+                    _textsToSay.insert(_textsToSay.begin(), "This was such an exciting mission! I still remember when I met person one and was like hello person one. And later during the parking I got so nervous. But everything worked out perfectly. So now it is time to say goodbye. Goodbye.");
+                    _missionComplete = true;
+                }
+            }
+            
             _servantHasFinishedJob = true;
         }
     }
@@ -475,11 +587,6 @@ class MissionController : public rclcpp::Node {
     }
     
     
-    bool needToParkUnderGreenRing() {
-        return _greenRingDetected && _greetedRings >= _ringsToGreet && _greetedCylinders >= _cylindersToGreet;
-    }
-    
-    
     void receiveRingObjectsUpdate(const delta_interfaces::msg::RingObjects & msg) const {
       for (int i = 0; i < static_cast<int>(msg.id.size()); i++) {
           string id = msg.id[i];
@@ -487,18 +594,11 @@ class MissionController : public rclcpp::Node {
               _knownRingObjectIds[id] = true; // add to map to keep track which object ids are known already
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new ring id: '%s'", id.c_str());
-              _greetedRings++;
+              _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " ring");
               
-              if (msg.color[i] == "green") {
-                  _greenRingDetected = true;
-                  _greenRingPositionX = msg.position_x[i];
-                  _greenRingPositionY = msg.position_y[i];
-                  
-                  RCLCPP_INFO(this->get_logger(), "Wow! Thats THE GREEN RING!!!");
-                  _textsToSay.insert(_textsToSay.begin(), "WOW, you are the "+ msg.color[i] + " ring. I will remember you for later");
-              } else {
-                  _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " ring");
-              }
+              
+              _knownRingCoordinateX[msg.color[i]] = msg.position_x[i];
+              _knownRingCoordinateY[msg.color[i]] = msg.position_y[i];
           }
           
       }
@@ -512,7 +612,6 @@ class MissionController : public rclcpp::Node {
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new cylinder id: '%s'", id.c_str());
               _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " cylinder");
-              _greetedCylinders++;
           }
           
       }
