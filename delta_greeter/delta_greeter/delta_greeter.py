@@ -141,6 +141,9 @@ class Greeter(Node):
         self.currently_executing_job = False # is the job still beeing processed
         self.id_of_current_job = ""
         
+        self.color1 = "nothing"
+        self.color2 = "nothing"
+        
         # publishing the jobs status
         self.publisher_ = self.create_publisher(JobStatus, 'job_status', 1)
         timer_period = 1.0  # seconds
@@ -166,6 +169,8 @@ class Greeter(Node):
         msg = JobStatus()
         msg.acting = self.currently_executing_job
         msg.job_id = self.id_of_current_job
+        msg.result_string1 = self.color1
+        msg.result_string2 = self.color2
         self.publisher_.publish(msg)
         
         
@@ -207,6 +212,14 @@ class Greeter(Node):
         self.sayText("Hello human. Can you tell me the color of the ring where I have to park?")
         
         # TODO: speech recognition
+        
+        # write answer into self.color1 and self.color2:
+        self.color1 = "nothing"
+        self.color2 = "nothing"
+        # or 
+        self.color1 = "green"
+        self.color2 = "red"
+        
         
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
