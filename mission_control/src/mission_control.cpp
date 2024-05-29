@@ -201,7 +201,7 @@ class MissionController : public rclcpp::Node {
                     RCLCPP_INFO(this->get_logger(), "continueExploring : need to greet someone to find out ring color, stopping exploration");
                     switchStatus(stopExploring);
                 
-                } else if (_ringColorKnown && !_cylinderApproached) {
+                } else if (_ringColorKnown && !_cylinderApproached && _knownRingCoordinateY.count(_ringColor) != 0) {
                     // robot has to park and approach cylinder -> switch to stop exploration status
                     RCLCPP_INFO(this->get_logger(), "continueExploring : need to park and approach cylinder, stopping exploration");
                     switchStatus(stopExploring);
