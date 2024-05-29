@@ -8,7 +8,7 @@ from threading import Thread
 import time
 import os
 import pyttsx3 # tts
-import librosa # for attempting to send audio to the robot's speaker
+# import librosa # for attempting to send audio to the robot's speaker
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -187,7 +187,7 @@ class Greeter(Node):
         person_id = int(person_id.split("_")[-1])
 
         # moving to person
-        """
+        
         self.get_logger().info('moving to greet person at (x: %f  y: %f  rot: %f)' % (position_x, position_y, rotation))
         self.rc.move_to_position(position_x, position_y, rotation)
         while not self.rc._arrived:
@@ -196,7 +196,7 @@ class Greeter(Node):
                 # Publish a marker
                 self.send_marker(position_x, position_y)
                 self.send_marker(position_x - 0.1, position_y, 1, 0.15, "greet_person_nav_goal")
-        """
+        
                 
                 
         # greeting the person
