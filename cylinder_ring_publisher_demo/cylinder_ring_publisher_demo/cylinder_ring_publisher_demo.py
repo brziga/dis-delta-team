@@ -20,21 +20,13 @@ class PubDemo(Node):
     def publishStuff(self):
         self.get_logger().info('publishing')
     
-        ring_msg = RingObjects() # rings at (1,1,1), (2,2,2) and (-0.5,0,0)
-        ring_msg.position_x = [1.0, 2.0, -1.2]
-        ring_msg.position_y = [1.0, 2.0, 1.7]
-        ring_msg.position_z = [1.0, 2.0, 0.0]
-        ring_msg.color = ["red", "blue", "green"]
-        ring_msg.id = ["ring_1", "ring_2", "ring_3"]
+        ring_msg = RingObjects()
+        ring_msg.position_x = [-1.1, -1.1, 1.1, 2.7]
+        ring_msg.position_y = [0.25, 3.0, 1.0, -1.7]
+        ring_msg.position_z = [1.0 1.0, 1.0, 1.0]
+        ring_msg.color = ["black", "blue", "red", "green"]
+        ring_msg.id = ["ring_1", "ring_2", "ring_3", "ring_4"]
         self.ring_publisher.publish(ring_msg)
-        
-        cylinder_msg = CylinderObjects() # cylinders at (10,10,10), (20,20,20) and (30,30,30)
-        cylinder_msg.position_x = [10.0, 20.0, 30.0]
-        cylinder_msg.position_y = [10.0, 20.0, 30.0]
-        cylinder_msg.position_z = [10.0, 20.0, 30.0]
-        cylinder_msg.color = ["red", "blue", "green"]
-        cylinder_msg.id = ["cylinder_1", "cylinder_2", "cylinder_3"]
-        self.cylinder_publisher.publish(cylinder_msg)
 
 
 def main(args=None):
