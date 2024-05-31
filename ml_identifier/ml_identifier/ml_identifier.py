@@ -12,6 +12,8 @@ from visualization_msgs.msg import Marker
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
+from pyzbar import pyzbar
+import requests
 
 from ultralytics import YOLO
 
@@ -40,6 +42,7 @@ class ml_identifier(Node):
 		self.scan = None
 
 		self.rgb_image_sub = self.create_subscription(Image, "/oakd/rgb/preview/image_raw", self.rgb_callback, qos_profile_sensor_data)
+		self.top_rgb_image_sub = self.create_subscription(Image, "/top_camera/rgb/preview/image_raw", self.top_rgb_callback, qos_profile_sensor_data)
 		self.pointcloud_sub = self.create_subscription(PointCloud2, "/oakd/rgb/preview/depth/points", self.pointcloud_callback, qos_profile_sensor_data)
 
 		self.marker_pub = self.create_publisher(Marker, marker_topic, QoSReliabilityPolicy.BEST_EFFORT)
@@ -47,6 +50,7 @@ class ml_identifier(Node):
 		self.model = YOLO("yolov8n.pt")
 
 		self.faces = []
+		self.qr_monalisa = None
 		
 		# information about the currently executed job
 		self.currently_executing_job = False # is the job still beeing processed
@@ -137,12 +141,41 @@ class ml_identifier(Node):
 
 				self.faces.append((cx,cy))
 
-			cv2.imshow("image", cv_image)
+			#cv2.imshow("image", cv_image)
 			key = cv2.waitKey(1)
 			if key==27:
 				print("exiting")
 				exit()
 			
+		except CvBridgeError as e:
+			print(e)
+
+
+	def download_image(self, url):
+		response = requests.get(url)
+		response.raise_for_status()
+
+		image_array = np.asarray(bytearray(response.content), dtype=np.uint8)
+		image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+		return image
+
+
+	def top_rgb_callback(self, data):
+		try:
+			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+			qr_codes = pyzbar.decode(cv_image)
+			for obj in qr_codes:
+				obj_data = obj.data.decode("utf-8")
+				self.get_logger().info(f"Data:", obj_data)
+				if obj_data.startswith("http") and obj_data.endswith(".png"):
+					if self.qr_monalisa is None:
+						self.get_logger().info(f"Saving mona lisa image")
+						self.qr_monalisa = self.download_image(obj_data)
+			cv2.imshow("image", cv_image)
+			key = cv2.waitKey(1)
+			if key==27:
+				print("exiting")
+				exit()
 		except CvBridgeError as e:
 			print(e)
 
