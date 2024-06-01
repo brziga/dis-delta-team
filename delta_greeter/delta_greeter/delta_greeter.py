@@ -7,8 +7,11 @@ from threading import Thread
 
 import time
 import os
+
+# speech work imports
 import pyttsx3
-#import librosa
+# import librosa # no longer used
+import speech_recognition as sr
 
 # robot controller imports
 from geometry_msgs.msg import Quaternion, PoseStamped
@@ -143,6 +146,8 @@ class Greeter(Node):
         
         self.color1 = "nothing"
         self.color2 = "nothing"
+        # the colors we are interested in
+        self.colors_interest = ["red", "green", "blue", "yellow", "purple", "orange", "black", "white", ] 
         
         # publishing the jobs status
         self.publisher_ = self.create_publisher(JobStatus, 'job_status', 1)
@@ -159,8 +164,10 @@ class Greeter(Node):
         # For publishing the markers
         self.marker_pub = self.create_publisher(Marker, "/delta_nav_marker", QoSReliabilityPolicy.BEST_EFFORT)
         
+        # speech work
         self.tts_engine = pyttsx3.init()
         self.tts_engine.setProperty("rate", 160) # default rate is 200; subtracting 40 seems to sound better
+        self.recognizer = sr.Recognizer()
 
         self.cmd_audio_publisher = self.create_publisher(AudioNoteVector, "/cmd_audio", 1)
         
@@ -211,14 +218,73 @@ class Greeter(Node):
         
         self.sayText("Hello human. Can you tell me the color of the ring where I have to park?")
         
-        # TODO: speech recognition
+        # speech recognition
+
+        # init text to none
+        text = None
+
+        # use microphone as source and listen
+        with sr.Microphone() as source:
+            print("I'm listening...\n")
+            audio = self.recognizer.listen(source)
+
+            # try to recognize using google api
+            try:
+                # Recognize speech using Google Web Speech API
+                print("Recognizing with Google Web Speech API...")
+                text = self.recognizer.recognize_google(audio)
+                print("Successful.")
+            except sr.UnknownValueError:
+                print("Google Web Speech API could not understand the audio.")
+            except sr.RequestError as e:
+                print(f"Could not request results from Google Web Speech API; {e}")
+                print("Trying Sphinx instead...")
+                try:
+                    print("Recognizing with Sphinx...")
+                    text = self.recognizer.recognize_sphinx(audio)
+                    print("Successful.")
+                except sr.UnknownValueError:
+                    print("Sphinx could not understand audio")
+                except sr.RequestError as e:
+                    print("Sphinx error; {0}".format(e))
+
+
+        found_colors = [] # init to empty
+
+        # if entirely unsuccessful
+        if text is None:
+            # raise Exception("Speech recognition failed.")
+            print("Speech recognition has failed. :(")
+        # otherwise pickup the colors
+        else:
+            print(f"You said: {text}")
+
+            # lets check for colors...
+            for word in text.split():
+                # if word is a new color
+                if word in self.colors_interest and  word not in found_colors:
+                    found_colors.append(word)
         
-        # write answer into self.color1 and self.color2:
-        self.color1 = "nothing"
-        self.color2 = "nothing"
-        # or 
-        self.color1 = "green"
-        self.color2 = "red"
+        if len(found_colors) == 0:
+            print("No colors received (or something went wrong).")
+        elif len(found_colors) == 1:
+            print("You only gave me one color: '{}'".format(found_colors[0]))
+            self.color1 = found_colors[0]
+        elif len(found_colors) == 2:
+            print("I received colors '{}' and '{}'".format(found_colors[0], found_colors[1]))
+            self.color1 = found_colors[0]
+            self.color2 = found_colors[1]
+        elif len(found_colors) >= 3:
+            print(f"You gave me more than two colors: {found_colors}. I'm continuing with the first two.")
+            self.color1 = found_colors[0]
+            self.color2 = found_colors[1]
+
+        # # write answer into self.color1 and self.color2:
+        # self.color1 = "nothing"
+        # self.color2 = "nothing"
+        # # or 
+        # self.color1 = "green"
+        # self.color2 = "red"
         
         
         
@@ -230,34 +296,36 @@ class Greeter(Node):
         self.tts_engine.say(text)
         self.tts_engine.runAndWait()
     
-    def makeNoteArrayFromAudioFile(self, audiofilename):
-        y, sr = librosa.load(audiofilename)
+    # this function is deprecated
+    # def makeNoteArrayFromAudioFile(self, audiofilename):
+    #     y, sr = librosa.load(audiofilename)
 
-        # Calculate onset envelopes
-        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-        # Detect onsets
-        onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
-        # Extract pitches
-        pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
-        # Calculate time intervals
-        hop_length = 512  # Adjust as needed
-        frame_duration = hop_length / sr
-        times = librosa.times_like(pitches, sr=sr, hop_length=hop_length)
-        # Create list of (frequency, time_interval) pairs
-        frequency_time_pairs = list(zip(pitches.max(axis=0), times))
-        return frequency_time_pairs
+    #     # Calculate onset envelopes
+    #     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    #     # Detect onsets
+    #     onset_frames = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
+    #     # Extract pitches
+    #     pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+    #     # Calculate time intervals
+    #     hop_length = 512  # Adjust as needed
+    #     frame_duration = hop_length / sr
+    #     times = librosa.times_like(pitches, sr=sr, hop_length=hop_length)
+    #     # Create list of (frequency, time_interval) pairs
+    #     frequency_time_pairs = list(zip(pitches.max(axis=0), times))
+    #     return frequency_time_pairs
 
-    def constructNoteVector(self, note_array):
-        # from given note array, construct a irobot_create_msgs/msg/AudioNoteVector.notes
-        output_notes = []
-        for pair in note_array:
-            # ew_note = {"frequency": pair[0], "max_runtime": Duration(sec=0, nanosec=int(round(pair[1]*1e9)))}
-            new_note = AudioNote()
-            new_note.frequency = int(round(pair[0]))
-            new_note.max_runtime = Duration(sec=0, nanosec=int(round(pair[1]*1e9)))
-            output_notes.append(new_note)
+    # this function is deprecated
+    # def constructNoteVector(self, note_array):
+    #     # from given note array, construct a irobot_create_msgs/msg/AudioNoteVector.notes
+    #     output_notes = []
+    #     for pair in note_array:
+    #         # ew_note = {"frequency": pair[0], "max_runtime": Duration(sec=0, nanosec=int(round(pair[1]*1e9)))}
+    #         new_note = AudioNote()
+    #         new_note.frequency = int(round(pair[0]))
+    #         new_note.max_runtime = Duration(sec=0, nanosec=int(round(pair[1]*1e9)))
+    #         output_notes.append(new_note)
 
-        return output_notes
+        # return output_notes
 
     def destroyNode(self):
         self.rc._nav_to_pose_client.destroy()
