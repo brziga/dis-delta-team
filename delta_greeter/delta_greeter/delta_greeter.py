@@ -291,7 +291,12 @@ class Greeter(Node):
         # self.color1 = "green"
         # self.color2 = "red"
         
-        
+        # TODO:
+        # We are supposed to approach multiple people and received colors from
+        # them, so I'm not sure how these 2 colors in self are supposed to work. 
+        # Probably needs some adjustment in terms of writing the answers into 
+        # them, but I'm not sure how they are used elsewhere/later, so I'll hold
+        # off for now. Should be very simple though...
         
         # IMPORTANT: after greeting has finished, set currently_executing_job to False
         self.currently_executing_job = False
