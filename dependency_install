@@ -1,0 +1,7 @@
+sudo:
+sudo apt-get install python3-pyaudio
+
+pip:
+pip install ultralytics
+pip install pyttsx3
+pip install speechrecognition
