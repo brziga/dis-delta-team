@@ -108,14 +108,15 @@ class detect_faces(Node):
 
 				
 				roi = cv_image[int(bbox[1]):int(bbox[3]), int(bbox[0]):int(bbox[2])]
+				print(roi.shape)
 				
 				if roi.size == 0:
 					self.get_logger().warning("Empty ROI, skipping this detection.")
 					continue
 
 				self.get_logger().info(f"ROI shape: {roi.shape}")
-
-				roi_hist = self.calculate_histogram(roi)
+				if roi.shape[0] / roi.shape[1] > 4:
+					continue
 
 				roi_hist = self.calculate_histogram(roi)
 				if roi_hist is None:
@@ -133,9 +134,9 @@ class detect_faces(Node):
 
 				cv2.imshow("ROI", roi)
 
-				if similarity > 0.22:# and avg_rgb < 70:
+				if similarity > 0.77:
 					self.monalisas.append((cx,cy))
-				else:
+				elif similarity < 0.60:
 					self.faces.append((cx,cy))
 		
 			cv2.imshow("image", cv_image)
