@@ -220,8 +220,7 @@ class Greeter(Node):
         
         # speech recognition
 
-        # init text to none
-        text = None
+        text = None # init text to none
 
         # use microphone as source and listen
         with sr.Microphone() as source:
@@ -230,26 +229,31 @@ class Greeter(Node):
 
             # try to recognize using google api
             try:
-                # Recognize speech using Google Web Speech API
+                # recognize speech using Google Web Speech API - required an internet connection
                 print("Recognizing with Google Web Speech API...")
                 text = self.recognizer.recognize_google(audio)
                 print("Successful.")
             except sr.UnknownValueError:
+                # Google API didn't understand
                 print("Google Web Speech API could not understand the audio.")
             except sr.RequestError as e:
+                # problem with the API
                 print(f"Could not request results from Google Web Speech API; {e}")
                 print("Trying Sphinx instead...")
                 try:
+                    # recognize using Sphinx - alternative option and should also work offline
                     print("Recognizing with Sphinx...")
                     text = self.recognizer.recognize_sphinx(audio)
                     print("Successful.")
                 except sr.UnknownValueError:
+                    # Sphinx didnt understand
                     print("Sphinx could not understand audio")
                 except sr.RequestError as e:
+                    # error in Sphinx
                     print("Sphinx error; {0}".format(e))
 
 
-        found_colors = [] # init to empty
+        found_colors = [] # init to empty, will hold the colors picked up from listening
 
         # if entirely unsuccessful
         if text is None:
@@ -265,6 +269,7 @@ class Greeter(Node):
                 if word in self.colors_interest and  word not in found_colors:
                     found_colors.append(word)
         
+        # response depending on the number of colors picked up
         if len(found_colors) == 0:
             print("No colors received (or something went wrong).")
         elif len(found_colors) == 1:
