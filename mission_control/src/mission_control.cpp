@@ -109,6 +109,7 @@ class MissionController : public rclcpp::Node {
     mutable int _answerCountBlue = 0;
     mutable int _answerCountBlack = 0;
     mutable bool _missionComplete = false;
+    mutable bool _finalJobIdSet = false;
     
     // getting job status updates
     rclcpp::Subscription<delta_interfaces::msg::JobStatus>::SharedPtr _jobStatusSuscription;
@@ -148,6 +149,13 @@ class MissionController : public rclcpp::Node {
         }
         
         if (_missionComplete) {
+            if(!_finalJobIdSet) {
+                initNewJobId();
+                _finalJobIdSet = true;
+            }
+            
+            RCLCPP_INFO(this->get_logger(), "waving : sending job");
+            sendWaveJob();
             //_decisionTimer->cancel();
             return;
         }
@@ -468,6 +476,14 @@ class MissionController : public rclcpp::Node {
         auto message = delta_interfaces::msg::ParkingJob();
         message.position_x = _nextParkPositionX;
         message.position_y = _nextParkPositionY;
+        message.only_wave = false;
+        message.job_id = _sentJobId;
+        _parkingJobPublisher->publish(message);
+    }
+    
+    void sendWaveJob() {
+        auto message = delta_interfaces::msg::ParkingJob();
+        message.only_wave = true;
         message.job_id = _sentJobId;
         _parkingJobPublisher->publish(message);
     }

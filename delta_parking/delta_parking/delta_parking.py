@@ -252,8 +252,8 @@ class Parking(Node):
         self.cylinder_position_y = 0.0
         
         # testing
-        #thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0))
-        #thread.start()
+        thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0, True))
+        thread.start()
         
     def receive_cylinder_marker(self, msg):
         if self.cylinder_spotted:
@@ -337,13 +337,22 @@ class Parking(Node):
             self.currently_executing_job = True
             self.publish_status()
 
-        thread = Thread(target=self.park_at_position, args=(msg.position_x, msg.position_y, msg.position_z))
+        thread = Thread(target=self.park_at_position, args=(msg.position_x, msg.position_y, msg.position_z, msg.only_wave))
         thread.start()
         
-    def park_at_position(self, position_x, position_y, position_z):
+    def park_at_position(self, position_x, position_y, position_z, only_wave):
         
         # just take a short break from everything
         time.sleep(1)
+        
+        if only_wave:
+            for i in range (30):
+                self.get_logger().info('waving at mona lisa')
+                self.publish_arm_command()
+                time.sleep(2)
+                self.publish_arm_command_qrscan()
+                time.sleep(2)
+            return
         
         self.parking_goal_x = position_x
         self.parking_goal_y = position_y
