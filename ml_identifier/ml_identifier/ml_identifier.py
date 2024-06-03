@@ -63,6 +63,8 @@ class ml_identifier(Node):
 		# listen to incoming jobs
 		self.job_subscription = self.create_subscription(MonalisaJob, 'monalisa_job', self.process_incoming_job, 1)
 		self.job_subscription  # prevent unused variable warning
+		
+		self.startScanning = False
 
 
 		self.get_logger().info(f"Node has been initialized! Will publish face markers to {marker_topic}.")
@@ -92,6 +94,9 @@ class ml_identifier(Node):
 	def scan_qr_code(self):
 	
 		# TODO: scan qr code here
+		self.startScanning = True
+		while self.startScanning:
+		    time.sleep(1)
 		
 		# when qr code scan has finished:
 		self.currently_executing_job = False
@@ -161,16 +166,21 @@ class ml_identifier(Node):
 
 
 	def top_rgb_callback(self, data):
+		if not self.startScanning:
+			return
 		try:
 			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
 			qr_codes = pyzbar.decode(cv_image)
 			for obj in qr_codes:
 				obj_data = obj.data.decode("utf-8")
-				self.get_logger().info(f"Data:", obj_data)
+				#self.get_logger().info(f"Data:  {obj_data}")
 				if obj_data.startswith("http") and obj_data.endswith(".png"):
 					if self.qr_monalisa is None:
 						self.get_logger().info(f"Saving mona lisa image")
 						self.qr_monalisa = self.download_image(obj_data)
+						cv2.imshow("Downloaded monalisa", self.qr_monalisa)
+						self.startScanning = False
+						
 			cv2.imshow("image", cv_image)
 			key = cv2.waitKey(1)
 			if key==27:

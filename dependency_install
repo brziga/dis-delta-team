@@ -1,5 +1,6 @@
 sudo:
 sudo apt-get install python3-pyaudio
+sudo apt install espeak
 
 pip:
 pip install ultralytics

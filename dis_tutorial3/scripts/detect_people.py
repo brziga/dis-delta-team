@@ -56,7 +56,7 @@ class detect_faces(Node):
 		print(script_dir)
 		print(script_dir)
 		print(script_dir)
-		rel_path = "../../../../src/dis_tutorial3/scripts/mona.png"
+		rel_path = "../../../../src/dis-delta-team/dis_tutorial3/scripts/mona.png"
 		abs_file_path = os.path.join(script_dir, rel_path)
 		self.reference_image = cv2.imread(abs_file_path)
 		self.reference_hist = self.calculate_histogram(self.reference_image)
