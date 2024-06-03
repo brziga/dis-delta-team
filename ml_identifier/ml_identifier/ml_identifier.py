@@ -96,7 +96,7 @@ class ml_identifier(Node):
 		# TODO: scan qr code here
 		self.startScanning = True
 		while self.startScanning:
-		    time.sleep(1)
+			time.sleep(1)
 		
 		# when qr code scan has finished:
 		self.currently_executing_job = False
