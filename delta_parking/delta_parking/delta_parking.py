@@ -324,6 +324,11 @@ class Parking(Node):
         msg.data = 'manual:[0.,0.3,0.0,2.5]'
         self.arm_publisher.publish(msg)
         
+    def publish_arm_command_qrscan(self):
+        msg = String_msg()
+        msg.data = 'manual:[0.,0.3,0.2,2.0]'
+        self.arm_publisher.publish(msg)
+        
     def process_incoming_job(self, msg):
         if self.id_of_current_job == msg.job_id or self.currently_executing_job == True:
             return
@@ -419,16 +424,18 @@ class Parking(Node):
         
         # now going to cylinder
         self.cylinder_spotted = False
+        self.publish_arm_command_qrscan()
         while not self.cylinder_spotted:
             self.get_logger().info('searching for cylinder...')
             self.send_marker(position_x - 0.1, position_y, 1, 0.15, "searching_cylinder")
-            self.publish_arm_command()
+            self.publish_arm_command_qrscan()
             self.rotate(1.0)
         
         self.get_logger().info('rotating to cylinder')
         self.rotate(-self.get_angle_to_world_position(self.cylinder_position_x, self.cylinder_position_y))
         self.cylinder_spotted = False
         while not self.robot_is_close_to_point(self.cylinder_position_x, self.cylinder_position_y, 0.3):
+            self.publish_arm_command_qrscan()
             self.get_logger().info('moving to cylinder')
             robot_map_position = self.get_robot_world_position()
             vector_robot_cylinder_x = self.cylinder_position_x - robot_map_position[0]

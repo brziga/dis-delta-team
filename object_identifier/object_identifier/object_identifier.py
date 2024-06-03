@@ -109,7 +109,8 @@ class LevelObjectIdentifier(Node):
             self.get_logger().info('person too far away: ignoring this person')
             return
         
-        face_to_robot_vector = -self.unit_vector(robot_to_face_vector) * 0.3
+        parking_distance_to_face = 0.5
+        face_to_robot_vector = -self.unit_vector(robot_to_face_vector) * parking_distance_to_face
 
 
         p_x = face_x + face_to_robot_vector[0]
