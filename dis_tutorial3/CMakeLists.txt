@@ -28,6 +28,7 @@ install(DIRECTORY
 
 install(PROGRAMS
   scripts/detect_people.py
+  scripts/dev_detect_people.py
   scripts/robot_commander.py
   DESTINATION lib/${PROJECT_NAME})
 
