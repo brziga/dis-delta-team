@@ -25,7 +25,7 @@ import numpy as np
 
 # structure to store the currently known level objects
 class CurrentLevelObjects:
-    def __init__(self, position_x, position_y, position_z, p_x, p_y, p_z, rotation, object_id, number_of_objects):
+    def __init__(self, position_x, position_y, position_z, p_x, p_y, p_z, rotation, object_id, counter, number_of_objects):
         self.position_x = position_x
         self.position_y = position_y
         self.position_z = position_z
@@ -34,6 +34,7 @@ class CurrentLevelObjects:
         self.p_z = p_z
         self.rotation = rotation
         self.object_id = object_id
+        self.counter = counter
         self.number_of_objects = number_of_objects
 
 class LevelObjectIdentifier(Node):
@@ -41,7 +42,7 @@ class LevelObjectIdentifier(Node):
     def __init__(self):
         super().__init__('level_object_identifier')
         # initialize member variables
-        self.current_level_objects_ = CurrentLevelObjects([], [], [], [], [], [], [], [], 0)
+        self.current_level_objects_ = CurrentLevelObjects([], [], [], [], [], [], [], [], [], 0)
         self.personId = 1
         
         # creating the publisher and a timer to publish level objects regulary
@@ -64,6 +65,7 @@ class LevelObjectIdentifier(Node):
         #self.insert_level_object(1.0, 2.0, .3, 0.0,"person_1")
         #self.insert_level_object(-1.0, -2.0, .3, 0.0,"person_2")
         #self.insert_level_object(1.0, 4.0, .3, 0.0,"person_3")
+        self.counterThreshold = 20
         
 
     # gets called every time the subscriber receives a face marker
@@ -98,6 +100,12 @@ class LevelObjectIdentifier(Node):
             dist_squared = dx * dx + dy * dy + dz * dz
             
             if (dist_squared < distance_threshold_squared):
+                self.current_level_objects_.counter[i] += 1
+                if "person" in self.current_level_objects_.object_id[i] and self.current_level_objects_.counter[i] < self.counterThreshold and is_mona_lisa:
+                    self.current_level_objects_.object_id[i] = "monalisa_" + str(self.personId)
+                    self.personId = self.personId + 1
+
+
                 # this face already exists!
                 self.get_logger().info('ALREADY KNOWN person detected at (map_frame): (x: %f  y: %f  z: %f)' % (face_x, face_y, face_z))
                 return
@@ -105,7 +113,7 @@ class LevelObjectIdentifier(Node):
         robot_map_position = self.transform_from_robot_to_map_frame_safe(0.0, 0.0)
 
         robot_to_face_vector = [face_x - robot_map_position[0], face_y - robot_map_position[1]]
-        if np.linalg.norm(robot_to_face_vector) > 2.5:
+        if np.linalg.norm(robot_to_face_vector) > 2.0:
             self.get_logger().info('person too far away: ignoring this person')
             return
         
@@ -130,10 +138,6 @@ class LevelObjectIdentifier(Node):
         self.personId = self.personId + 1
         self.get_logger().info('FOUND A NEW person detected at (map_frame): (x: %f  y: %f  z: %f)' % (face_x, face_y, face_z))
         
-        # TODO: - This node is currenty using the marker messages from the detect_people script of dis_tutorial3. I guess it would be
-        #         better to implement an other msg-topic instead of using the marker-msg. Maybe migrate the detect_people script into our project?
-        #       - Best might be not to set the face position itself as the object position, but a position about 1 meter before the face and
-        #         with a rotation so that the robot faces the person when moving to the x,y,z,rot of the stored object
 
     def unit_vector(self, vector):
         return vector / np.linalg.norm(vector)
@@ -216,6 +220,7 @@ class LevelObjectIdentifier(Node):
             old_current_level_objects.p_z + [p_z],
             old_current_level_objects.rotation + [object_rotation],
             old_current_level_objects.object_id + [object_id],
+            old_current_level_objects.counter + [1],
             old_current_level_objects.number_of_objects + 1
         )
         # publish current level objects whenever something changes about them (plus periodically via timer)
@@ -226,13 +231,37 @@ class LevelObjectIdentifier(Node):
     def publish_level_objects(self):
         # getting pointer to current_level_objects before publishing, in case the object is exchanged while building the message
         current_level_objects = self.current_level_objects_
-        msg = LevelObjects() # creating msg of type LevelObjects interface (see import above: from delta_interfaces.msg import LevelObjects)
+
+
+        """msg = LevelObjects() # creating msg of type LevelObjects interface (see import above: from delta_interfaces.msg import LevelObjects)
         msg.position_x = current_level_objects.p_x
         msg.position_y = current_level_objects.p_y
         msg.position_z = current_level_objects.p_z
         msg.rotation = current_level_objects.rotation
         msg.id = current_level_objects.object_id
-        msg.number_of_objects = current_level_objects.number_of_objects
+        msg.number_of_objects = current_level_objects.number_of_objects"""
+
+        msg = LevelObjects()
+        msg.position_x = []
+        msg.position_y = []
+        msg.position_z = []
+        msg.rotation = []
+        msg.id = []
+        number_of_objects = 0
+        index = -1
+        for x in current_level_objects.p_x:
+            index += 1
+            if current_level_objects.counter[index] < self.counterThreshold:
+                continue
+            msg.position_x.append(current_level_objects.p_x[index])
+            msg.position_y.append(current_level_objects.p_y[index])
+            msg.position_z.append(current_level_objects.p_z[index])
+            msg.rotation.append(current_level_objects.rotation[index])
+            msg.id.append(current_level_objects.object_id[index])
+            number_of_objects += 1
+
+        msg.number_of_objects = number_of_objects
+
         
         self.publisher_.publish(msg)
         self.publish_level_object_markers()

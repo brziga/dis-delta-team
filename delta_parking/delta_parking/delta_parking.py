@@ -250,10 +250,12 @@ class Parking(Node):
         self.marker_subscription  # prevent unused variable warning
         self.cylinder_position_x = 0.0
         self.cylinder_position_y = 0.0
+
+        self.publish_arm_command()
         
         # testing
-        thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0, True))
-        thread.start()
+        #thread = Thread(target=self.park_at_position, args=(2.5, -1.5, 0.0, True))
+        #thread.start()
         
     def receive_cylinder_marker(self, msg):
         if self.cylinder_spotted:
@@ -443,7 +445,7 @@ class Parking(Node):
         self.get_logger().info('rotating to cylinder')
         self.rotate(-self.get_angle_to_world_position(self.cylinder_position_x, self.cylinder_position_y))
         self.cylinder_spotted = False
-        while not self.robot_is_close_to_point(self.cylinder_position_x, self.cylinder_position_y, 0.3):
+        while not self.robot_is_close_to_point(self.cylinder_position_x, self.cylinder_position_y, 0.5):
             self.publish_arm_command_qrscan()
             self.get_logger().info('moving to cylinder')
             robot_map_position = self.get_robot_world_position()
@@ -487,7 +489,7 @@ class Parking(Node):
         
         if not self.currently_parking:
             return
-        if not self.robot_is_close_to_point(self.parking_goal_x, self.parking_goal_y, 1.5):
+        if not self.robot_is_close_to_point(self.parking_goal_x, self.parking_goal_y, 1.0):
             return
         
         self.spotted_ring = True

@@ -610,7 +610,7 @@ class MissionController : public rclcpp::Node {
               _knownRingObjectIds[id] = true; // add to map to keep track which object ids are known already
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new ring id: '%s'", id.c_str());
-              _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " ring");
+              //_textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " ring");
               
               
               _knownRingCoordinateX[msg.color[i]] = msg.position_x[i];
@@ -627,7 +627,7 @@ class MissionController : public rclcpp::Node {
               _knownCylinderObjectIds[id] = true; // add to map to keep track which object ids are known already
               
               RCLCPP_INFO(this->get_logger(), ">>> I heard a new cylinder id: '%s'", id.c_str());
-              _textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " cylinder");
+              //_textsToSay.insert(_textsToSay.begin(), "hello "+ msg.color[i] + " cylinder");
           }
           
       }

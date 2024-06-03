@@ -259,9 +259,12 @@ class Greeter(Node):
         if text is None:
             # raise Exception("Speech recognition failed.")
             print("Speech recognition has failed. :(")
+            self.sayText("Speech recognition has failed. :(")
         # otherwise pickup the colors
         else:
+            text = text.lower()
             print(f"You said: {text}")
+            self.sayText(f"You said: {text}")
 
             # lets check for colors...
             for word in text.split():
@@ -269,18 +272,24 @@ class Greeter(Node):
                 if word in self.colors_interest and  word not in found_colors:
                     found_colors.append(word)
         
+        self.color1 = "nothing"
+        self.color2 = "nothing"
         # response depending on the number of colors picked up
         if len(found_colors) == 0:
             print("No colors received (or something went wrong).")
+            self.sayText("No colors received (or something went wrong).")
         elif len(found_colors) == 1:
             print("You only gave me one color: '{}'".format(found_colors[0]))
+            self.sayText("You only gave me one color: '{}'".format(found_colors[0]))
             self.color1 = found_colors[0]
         elif len(found_colors) == 2:
             print("I received colors '{}' and '{}'".format(found_colors[0], found_colors[1]))
+            self.sayText("I received colors '{}' and '{}'".format(found_colors[0], found_colors[1]))
             self.color1 = found_colors[0]
             self.color2 = found_colors[1]
         elif len(found_colors) >= 3:
             print(f"You gave me more than two colors: {found_colors}. I'm continuing with the first two.")
+            self.sayText(f"You gave me more than two colors: {found_colors}. I'm continuing with the first two.")
             self.color1 = found_colors[0]
             self.color2 = found_colors[1]
 

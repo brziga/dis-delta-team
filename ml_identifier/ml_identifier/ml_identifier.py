@@ -107,7 +107,7 @@ class ml_identifier(Node):
 		# TODO: check if mona lisa is real and store it like this:
 		self.is_real_monalisa = True # wow its the real mona lisa!
 		# or
-		self.is_real_monalisa = False # oh no, just another fake mona lisa
+		self.is_real_monalisa = True # oh no, just another fake mona lisa
 		
 		# when mona lisa check is finished and answer stored in self.is_real_monalisa, do:
 		self.currently_executing_job = False
@@ -208,7 +208,7 @@ class ml_identifier(Node):
 			d = a[y,x,:]
 
 			# create marker
-			marker = Marker()
+			"""marker = Marker()
 
 			marker.header.frame_id = "/base_link"
 			marker.header.stamp = data.header.stamp
@@ -233,7 +233,7 @@ class ml_identifier(Node):
 			marker.pose.position.y = float(d[1])
 			marker.pose.position.z = float(d[2])
 
-			self.marker_pub.publish(marker)
+			self.marker_pub.publish(marker)"""
 
 def main():
 	print('ml_identifier node starting.')

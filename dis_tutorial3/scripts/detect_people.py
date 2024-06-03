@@ -134,9 +134,9 @@ class detect_faces(Node):
 
 				cv2.imshow("ROI", roi)
 
-				if similarity > 0.77:
+				if similarity > 0.85:
 					self.monalisas.append((cx,cy))
-				elif similarity < 0.60:
+				elif similarity < 0.58:
 					self.faces.append((cx,cy))
 		
 			cv2.imshow("image", cv_image)
