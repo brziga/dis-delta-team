@@ -1,18 +1,15 @@
 #!/usr/bin/python3
 
-# for transforming between coordinate frames
+import rclpy
+from rclpy.node import Node
+import cv2
+import numpy as np
 from tf2_ros.buffer import Buffer
 from tf2_ros import TransformException
 from tf2_ros.transform_listener import TransformListener
 from rclpy.duration import Duration
 from geometry_msgs.msg import PointStamped
 import tf2_geometry_msgs as tfg
-
-
-import rclpy
-from rclpy.node import Node
-import cv2
-import numpy as np
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PointStamped, Vector3, Pose
@@ -33,29 +30,22 @@ qos_profile = QoSProfile(
           history=QoSHistoryPolicy.KEEP_LAST,
           depth=1)
 
-PCL_Z_THRESH = 0.55
+PCL_Z_THRESH = 0.25
 DIST_EXST_THRESH = 50
 WIDTH_DIFF_THRESH = 5
 
 def rgb_to_color_name(rgb):
-    R, G, B = rgb
-
-    if R > 200 and G < 50 and B < 50:
-        return "Red"
-    elif G > 200 and R < 50 and B < 50:
-        return "Green"
-    elif B > 200 and R < 50 and G < 50:
-        return "Blue"
-    elif R > 150 and B > 150 and G < 75:
-        return "Purple"
-    elif R > 200 and G > 200 and B < 50:
-        return "Yellow"
-    elif R < 50 and G < 50 and B < 50:
+    r, g, b = rgb
+    if r < 30 and g < 30 and b < 30:
         return "Black"
-    elif R > 200 and G > 200 and B > 200:
-        return "White"
-    else:
-        return "Unknown"
+    elif max([r,g,b]) == r:
+        return "Red"
+    elif max([r,g,b]) == g:
+        return "Green"
+    elif max([r,g,b]) == b:
+        return "Blue"
+    
+    return "Unknown"
 
 # def point_below_center(center, axes, angle):
 #     # Unpack center and axes
@@ -111,9 +101,9 @@ class RingDetector(Node):
         self.marker_num = 1
 
         # Subscribe to the image and/or depth topic
-        self.image_sub = self.create_subscription(Image, "/top_camera/rgb/preview/image_raw", self.image_callback, 1)
-        self.depth_sub = self.create_subscription(Image, "/top_camera/rgb/preview/depth", self.depth_callback, 1)
-        self.pcl_sub = self.create_subscription(PointCloud2, "/top_camera/rgb/preview/depth/points", self.pcl_callback, 1)
+        self.image_sub = self.create_subscription(Image, "/oakd/rgb/preview/image_raw", self.image_callback, 1)
+        self.depth_sub = self.create_subscription(Image, "/oakd/rgb/preview/depth", self.depth_callback, 1)
+        self.pcl_sub = self.create_subscription(PointCloud2, "/oakd/rgb/preview/depth/points", self.pcl_callback, 1)
 
         self.marker_pub = self.create_publisher(Marker, marker_topic, QoSReliabilityPolicy.BEST_EFFORT)
 
@@ -122,11 +112,11 @@ class RingDetector(Node):
         self.rings_detected = []
 
         # Publiser for the visualization markers
-        #self.marker_pub = self.create_publisher(Marker, "/ring", QoSReliabilityPolicy.BEST_EFFORT)
+        # self.marker_pub = self.create_publisher(Marker, "/ring", QoSReliabilityPolicy.BEST_EFFORT)
 
         # Object we use for transforming between coordinate frames
-        self.tf_buf = Buffer()
-        self.tf_listener = TransformListener(self.tf_buf, self)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         cv2.namedWindow("Binary Image", cv2.WINDOW_NORMAL)
         cv2.namedWindow("Detected contours", cv2.WINDOW_NORMAL)
@@ -180,7 +170,7 @@ class RingDetector(Node):
         for cnt in contours:
             #     print cnt
             #     print cnt.shape
-            if cnt.shape[0] >= 20:
+            if cnt.shape[0] >= 11:
                 ellipse = cv2.fitEllipse(cnt)
                 elps.append(ellipse)
 
@@ -272,8 +262,8 @@ class RingDetector(Node):
 
 
             # Get a bounding box, around the first ellipse ('average' of both elipsis)
-            size = (e1[1][0]+e1[1][1])/2
-            center = (e1[0][1], e1[0][0])
+            size = (le[1][0]+le[1][1])/2
+            center = (le[0][1], le[0][0])
 
             x1 = int(center[0] - size / 2)
             x2 = int(center[0] + size / 2)
@@ -324,8 +314,6 @@ class RingDetector(Node):
 
             rows = np.where(mask_ring[int(center[0])::, int(center[1])] != 0)
             ref_point = [np.median(rows), int(center[0])]
-            # cv2.circle(cv_image, (ref_point[1], ref_point[0]), radius=3, color=(255, 0, 255), thickness=-1)
-
 
             self.rings_candidates.append(
                 RingObject(
@@ -361,10 +349,10 @@ class RingDetector(Node):
         image_1 = depth_image / 65536.0 * 255
         image_1 = image_1/np.max(image_1)*255
 
-        image_viz = np.array(image_1, dtype= np.uint8)
+        #image_viz = np.array(image_1, dtype= np.uint8)
 
-        cv2.imshow("Depth window", image_viz)
-        cv2.waitKey(1)
+        #cv2.imshow("Depth window", image_viz)
+        #cv2.waitKey(1)
         
 
         for ring_candidate in self.rings_candidates:
@@ -376,7 +364,7 @@ class RingDetector(Node):
 
 
 
-    def pcl_callback(self,data):
+    '''def pcl_callback(self,data):
 
         height = data.height
         width = data.width
@@ -386,66 +374,46 @@ class RingDetector(Node):
         for ring_candidate in self.rings_candidates:
 
             # print(ring_candidate.center)
-            x, y = ring_candidate.ref_point
-            y, x = int(y), int(x)
+            #x, y = ring_candidate.ref_point
+            #y, x = int(y), int(x)
             # print(y)
             # print(x)
-            xc, yc = ring_candidate.center
-            yc, xc = int(yc), int(xc)
 
+            x_min, y_min = ring_candidate.corners[0]
+            x_max, y_max = ring_candidate.corners[1]
+
+            x_min = max(x_min, 0)
+            y_min = max(y_min, 0)
+            x_max = min(x_max, width - 1)
+            y_max = min(y_max, height - 1)
             
 
             pcl =  pc2.read_points_numpy(data, field_names= ("x", "y", "z"))
             # print(pcl)
             pcl = pcl.reshape((height,width,3))
             # print(pcl)
+    
+            region_pcl = pcl[y_min:y_max + 1, x_min:x_max + 1, :]
 
-            y = min(y, pcl.shape[0]-1)
-            y = min(x, pcl.shape[1]-1)
+            valid_points = region_pcl[(region_pcl[:, :, 2] != np.inf) & (region_pcl[:, :, 2] != 0)]
+            if valid_points.size == 0:
+                continue
 
-            pcl_center = pcl[xc,yc,:]
+            closest_point = valid_points[np.argmin(valid_points[:, 2])]
+
+            ring_candidate.pcl_coords = closest_point
+
+            #y = min(y, pcl.shape[0]-1)
+            #y = min(x, pcl.shape[1]-1)
+
+            #pcl_center = pcl[y,x,:]
             # print(pcl_center)
 
-            time_now = rclpy.time.Time()
-
-            point_in_arm_camera_frame = PointStamped()
-            point_in_arm_camera_frame.header.frame_id = "/top_camera_link"
-            point_in_arm_camera_frame.header.stamp = time_now.to_msg()
-            point_in_arm_camera_frame.point.x = float(pcl_center[0])
-            point_in_arm_camera_frame.point.y = float(pcl_center[1])
-            point_in_arm_camera_frame.point.z = float(pcl_center[2])
-        
-            
-            
-            timeout = rclpy.duration.Duration(seconds=0.1)
-            
-            
-            #point_in_robot_frame = PointStamped()
-            #point_in_robot_frame.header.frame_id = "/top_camera_link"
-            #point_in_robot_frame.header.stamp = header_stamp
-            #point_in_robot_frame.point.x = robot_frame_x
-            #point_in_robot_frame.point.y = robot_frame_y
-            #point_in_robot_frame.point.z = robot_frame_z
-
-            try:
-                trans = self.tf_buf.lookup_transform("map", "top_camera_link", time_now, timeout)
-                point_in_map_frame = tfg.do_transform_point(point_in_arm_camera_frame, trans)
-                map_frame_x = point_in_map_frame.point.x
-                map_frame_y = point_in_map_frame.point.y
-                map_frame_z = point_in_map_frame.point.z
-            except TransformException as te:
-                self.get_logger().info(f"Cound not get the transform: {te}")
-                return
-
-            # print(map_frame_z)
-            if map_frame_z < PCL_Z_THRESH:
-                return
-
-            ring_candidate.pcl_coords = pcl_center
+            #ring_candidate.pcl_coords = pcl_center
 
             # print(f"PCL of ring {ring_candidate.id}: {pcl_center}")
 
-            if ring_candidate.hollow == True:
+            if closest_point[2] > PCL_Z_THRESH and ring_candidate.hollow:
                 for det_ring in self.rings_detected:
                     distance = np.linalg.norm(
                         ring_candidate.pcl_coords 
@@ -453,7 +421,7 @@ class RingDetector(Node):
                         det_ring.pcl_coords
                     )
 
-                    # print(f"Distance between {ring_candidate.pcl_coords} and {det_ring.pcl_coords} is {distance}")
+                    print(f"Distance between {ring_candidate.pcl_coords} and {det_ring.pcl_coords} is {distance}")
 
                     if not np.isinf(distance) and not np.isnan(distance) and distance > DIST_EXST_THRESH:
                         self.rings_detected.append(ring_candidate)
@@ -473,34 +441,168 @@ class RingDetector(Node):
 
 
             # # create marker
-            marker = Marker()
+            # marker = Marker()
 
-            marker.header.frame_id = "/map"
-            marker.header.stamp = data.header.stamp
+            # marker.header.frame_id = "/base_link" #TODO
+            # marker.header.stamp = data.header.stamp
 
-            marker.type = Marker.SPHERE
-            marker.id = 0
+            # marker.type = 2
+            # marker.id = 0
 
             # # Set the scale of the marker
-            scale = 0.1
-            marker.scale.x = scale
-            marker.scale.y = scale
-            marker.scale.z = scale
+            # scale = 0.1
+            # marker.scale.x = scale
+            # marker.scale.y = scale
+            # marker.scale.z = scale
 
             # # Set the color
-            marker.color.r = 0.0
-            marker.color.g = 0.0
-            marker.color.b = 1.0
-            marker.color.a = 1.0
+            # marker.color.r = 0.0
+            # marker.color.g = 0.0
+            # marker.color.b = 1.0
+            # marker.color.a = 1.0
 
             # # Set the pose of the marker
-            marker.pose.position.x = float(map_frame_x)
-            marker.pose.position.y = float(map_frame_y)
-            marker.pose.position.z = float(map_frame_z)
+            # marker.pose.position.x = float(pcl_center[0])
+            # marker.pose.position.y = float(pcl_center[1])
+            # marker.pose.position.z = float(pcl_center[2])
 
-            self.marker_pub.publish(marker)
+            # self.marker_pub.publish(marker)
+
+        self.rings_candidates = []'''
+    
+    def pcl_callback(self, data):
+
+        height = data.height
+        width = data.width
+        point_step = data.point_step
+        row_step = data.row_step
+
+        for ring_candidate in self.rings_candidates:
+            x_min, y_min = ring_candidate.corners[0]
+            x_max, y_max = ring_candidate.corners[1]
+
+            x, y = ring_candidate.center
+            y, x = int(y), int(x)
+
+            pcl = pc2.read_points_numpy(data, field_names=("x", "y", "z"))
+            pcl = pcl.reshape((height, width, 3))
+
+            y = min(y, pcl.shape[0] - 1)
+            x = min(x, pcl.shape[1] - 1)
+
+            pcl_center = pcl[y, x, :]
+
+            if np.isinf(pcl_center).any():
+                ring_candidate.hollow = True
+                continue
+
+
+            x_min = int(x_min + 0.1 * x_min)
+            y_min = int(y_min + 0.1 * y_min)
+            x_max = int(x_max + 0.1 * x_max)
+            y_max = int(y_max + 0.1 * y_max)
+
+            # Ensure the bounding box is within the point cloud dimensions
+            x_min = max(x_min, 0)
+            y_min = max(y_min, 0)
+            x_max = min(x_max, width - 1)
+            y_max = min(y_max, height - 1)
+
+            # Extract the point cloud data within the bounding box
+            region_pcl = pcl[y_min:y_max + 1, x_min:x_max + 1, :]
+
+            # Filter out points with z as inf or 0
+            valid_points = region_pcl[(region_pcl[:, :, 2] != np.inf) & (region_pcl[:, :, 2] != 0)]
+            
+            if valid_points.size == 0:
+                continue  # No valid points, skip this candidate
+
+            # Find the point with the minimum Z value
+            closest_point = valid_points[np.argmin(valid_points[:, 2])]
+
+            ring_candidate.pcl_coords = closest_point
+
+            newring = False
+
+            if closest_point[2] > PCL_Z_THRESH and ring_candidate.hollow:
+                for det_ring in self.rings_detected:
+                    distance = np.linalg.norm(
+                        ring_candidate.pcl_coords 
+                        - 
+                        det_ring.pcl_coords
+                    )
+
+                    print(f"Distance between {ring_candidate.pcl_coords} and {det_ring.pcl_coords} is {distance}")
+
+                    if not np.isinf(distance) and not np.isnan(distance) and distance > DIST_EXST_THRESH:
+                        self.rings_detected.append(ring_candidate)
+                        newring = True
+                        print(f"Confirmed ring {ring_candidate.id} with: \n\t center: {ring_candidate.center} \n\t color: {ring_candidate.color_name} {ring_candidate.color_num} \n\t hollow: {ring_candidate.hollow} \n\t pcl coords: {ring_candidate.pcl_coords}")
+                    else:
+                        if ring_candidate.color_name == "Unknown": continue
+                        elif ring_candidate.color_name not in det_ring.color_voting.keys():
+                            det_ring.color_voting[ring_candidate.color_name] = 1
+                        else:
+                            det_ring.color_voting[ring_candidate.color_name] += 1
+                    
+                if len(self.rings_detected) == 0:
+                    if ring_candidate.color_name != "Unknown":
+                        ring_candidate.color_voting[ring_candidate.color_name] = 1
+                    self.rings_detected.append(ring_candidate)
+                    newring = True
+                    print(f"Confirmed ring {ring_candidate.id} with: \n\t center: {ring_candidate.center} \n\t color: {ring_candidate.color_name} {ring_candidate.color_num} \n\t hollow: {ring_candidate.hollow} \n\t pcl coords: {ring_candidate.pcl_coords}")
+
+
+                if newring:
+                    print("putting ring on map", ring_candidate.color_num)
+                    time_now = rclpy.time.Time()
+                    timeout = rclpy.duration.Duration(seconds=0.1)
+
+                    point_on_ring = PointStamped()
+                    point_on_ring.header.frame_id = "/base_link"
+                    point_on_ring.header.stamp = time_now.to_msg()
+                    point_on_ring.point.x = float(closest_point[0])
+                    point_on_ring.point.y = float(closest_point[1])
+                    point_on_ring.point.z = float(closest_point[2])
+
+                    try:
+                        trans = self.tf_buffer.lookup_transform("map", "base_link", time_now, timeout)
+                        point_in_map_frame = tfg.do_transform_point(point_on_ring, trans)
+                        map_frame_x = point_in_map_frame.point.x
+                        map_frame_y = point_in_map_frame.point.y
+                        map_frame_z = point_in_map_frame.point.z
+                    except TransformException as te:
+                        self.get_logger().info(f"Cound not get the transform: {te}")
+                        return
+                    
+                    # Create marker for visualization
+                    marker = Marker()
+                    marker.header.frame_id = "map"
+                    marker.header.stamp = self.get_clock().now().to_msg()
+                    marker.type = Marker.SPHERE
+                    marker.id = ring_candidate.id
+
+                    # Set the scale of the marker
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+
+                    # Set the color
+                    marker.color.r = 0.0
+                    marker.color.g = 0.0
+                    marker.color.b = 1.0
+                    marker.color.a = 1.0
+
+                    # Set the pose of the marker
+                    marker.pose.position.x = float(map_frame_x)
+                    marker.pose.position.y = float(map_frame_y)
+                    marker.pose.position.z = float(map_frame_z)
+
+                    self.marker_pub.publish(marker)
 
         self.rings_candidates = []
+
+
 
 
 
