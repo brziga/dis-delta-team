@@ -22,6 +22,10 @@ from delta_interfaces.msg import JobStatus
 from threading import Thread
 import time
 
+import tensorflow as tf
+from tensorflow.keras import layers, losses
+from tensorflow.keras.models import Model
+
 class ml_identifier(Node):
 
 	def __init__(self):
@@ -66,6 +70,13 @@ class ml_identifier(Node):
 		
 		self.startScanning = False
 
+		# Mona Lisa classifier stuff
+		# TODO: threshold
+		self.real_ml_thresh = 0.002
+		# TODO: make sure dir is correct
+		self.ml_classifier = tf.keras.models.load_model("src/dis-delta-team/anomaly_detection/anomaly_detection_model")
+		# TODO_ will this work...
+		self.current_frame = None # current frame from camera, saved to this by rgb_callback
 
 		self.get_logger().info(f"Node has been initialized! Will publish face markers to {marker_topic}.")
 		
@@ -101,14 +112,111 @@ class ml_identifier(Node):
 		# when qr code scan has finished:
 		self.currently_executing_job = False
 		self.publish_job_status()
-        
+
+	def color_prepare(image_input, debug=False, test=False):
+
+		# Convert the image to RGB color space
+		# rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+		rgb = np.copy(image_input)
+
+		# Define the range for blue color in RGB
+		lower_color_thr = np.array([0, 0, 75])
+		upper_color_thr = np.array([70, 70, 255])
+
+		if test:
+			max_value = np.max(rgb)
+			lower_color_thr = np.array([40, 0, 0])
+			upper_color_thr = np.array([120, 15, 15])
+
+		# Create a mask for the blue color
+		mask = cv2.inRange(rgb, lower_color_thr, upper_color_thr)
+
+		# Set all pixels corresponding to the blue border to black
+		rgb[mask != 0] = [0, 0, 0]
+
+		# Find contours in the mask
+		contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+		if contours:
+			# Sort contours by area, largest first
+			contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+			# Get the second largest contour
+			second_largest_contour = contours[1]
+
+			# Create a mask for the second largest contour
+			contour_mask = np.zeros_like(mask)
+			cv2.drawContours(contour_mask, [second_largest_contour], -1, 255, thickness=cv2.FILLED)
+
+			# Invert the contour mask to get the area outside the contour
+			outside_contour_mask = cv2.bitwise_not(contour_mask)
+
+			# Set all masked pixels to white
+			rgb[outside_contour_mask != 0] = [0, 0, 0]
+
+			# image_yuv = cv2.cvtColor(rgb, cv2.COLOR_RGB2YUV)
+			# # Apply histogram equalization on the Y channel
+			# image_yuv[:, :, 0] = cv2.equalizeHist(image_yuv[:, :, 0])
+			# rgb = cv2.cvtColor(image_yuv, cv2.COLOR_YUV2RGB)
+
+			max_value = np.max(rgb)
+			rgb = rgb.astype(np.float32) / max_value
+
+			return rgb
+		
+	def size_prepare(img, new_resolution):
+
+		# Get current image size
+		height, width = img.shape[:2]
+
+		# Calculate the desired width based on the height
+		desired_width = height
+
+		# Calculate padding size
+		pad_width = max(0, desired_width - width)
+		top = 0
+		bottom = 0
+		left = pad_width // 2
+		right = pad_width - left
+
+		# Add black padding to the image
+		padded_img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+
+		resized_img = cv2.resize(padded_img, (new_resolution, new_resolution), interpolation=cv2.INTER_AREA)
+
+		return resized_img
+
 	def check_mona_lisa(self):
 	
-		# TODO: check if mona lisa is real and store it like this:
-		self.is_real_monalisa = True # wow its the real mona lisa!
-		# or
-		self.is_real_monalisa = True # oh no, just another fake mona lisa
+		# # TODO: check if mona lisa is real and store it like this:
+		# self.is_real_monalisa = True # wow its the real mona lisa!
+		# # or
+		# self.is_real_monalisa = True # oh no, just another fake mona lisa
 		
+
+		# get image
+		cf_image = self.current_frame
+
+		# preprocess the image
+		image_cp = color_prepare(cf_image, test=True) # color-prepared
+		image_sp = size_prepare(image_cp, 128) # size-prepared 
+		
+		test_image = np.array([image_sp])
+
+		# model magic
+		enc_image = self.ml_classifier.encoder(test_image).numpy()
+		dec_image = self.ml_classifier.decoder(enc_image).numpy()
+		recon_error = tf.reduce_mean(tf.square(test_image - dec_image))
+		print(f"Reconstruction error from classifier was: {recon_error}")
+
+		# decision
+		if recon_error > self.real_ml_thresh:
+			self.is_real_monalisa = False
+		else:
+			self.is_real_monalisa = True
+
+		print("Decision: Mona Lisa is {}".format("REAL" if self.is_real_monalisa else "FAKE"))
+
 		# when mona lisa check is finished and answer stored in self.is_real_monalisa, do:
 		self.currently_executing_job = False
 		self.publish_job_status()
@@ -119,6 +227,7 @@ class ml_identifier(Node):
 
 		try:
 			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+			self.current_frame = cv_image # save to object so other functions can access it indirectly
 
 			self.get_logger().info(f"Running inference on image...")
 
