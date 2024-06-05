@@ -1,3 +1,6 @@
+git:
+git lfs install
+
 sudo:
 sudo apt-get install python3-pyaudio
 sudo apt install espeak
@@ -6,3 +9,11 @@ pip:
 pip install ultralytics
 pip install pyttsx3
 pip install speechrecognition
+pip install tensorflow
+
+should be already installed:
+pip install opencv-python 
+
+not necessary for running the implementation (i think):
+pip install scikit-learn
+pip install matplotlib
