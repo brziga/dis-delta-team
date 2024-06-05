@@ -151,8 +151,14 @@ class ml_identifier(Node):
 		self.ml_classifier = tf.keras.models.load_model("src/dis-delta-team/anomaly_detection/anomaly_detection_model")
 		# TODO_ will this work...
 		self.current_frame = None # current frame from camera, saved to this by rgb_callback
+		self.do_classification = False
 
 		self.get_logger().info(f"Node has been initialized! Will publish face markers to {marker_topic}.")
+
+		thread = Thread(target = self.check_mona_lisa)
+		thread.start()
+
+		
 		
 	def publish_job_status(self):
 		msg = JobStatus()
@@ -195,81 +201,100 @@ class ml_identifier(Node):
 		# self.is_real_monalisa = True # oh no, just another fake mona lisa
 		
 
-		# get image
-		cf_image = self.current_frame
-
-		# preprocess the image
-		image_cp = color_prepare(cf_image, test=True) # color-prepared
-		image_sp = size_prepare(image_cp, 128) # size-prepared 
+		self.do_classification = True
 		
-		test_image = np.array([image_sp])
-
-		# model magic
-		enc_image = self.ml_classifier.encoder(test_image).numpy()
-		dec_image = self.ml_classifier.decoder(enc_image).numpy()
-		recon_error = tf.reduce_mean(tf.square(test_image - dec_image))
-		print(f"Reconstruction error from classifier was: {recon_error}")
-
-		# decision
-		if recon_error > self.real_ml_thresh:
-			self.is_real_monalisa = False
-		else:
-			self.is_real_monalisa = True
-
-		print("Decision: Mona Lisa is {}".format("REAL" if self.is_real_monalisa else "FAKE"))
-
-		# lets visualize...
-		viz_sep = np.zeros(image_sp.shape[0], 10)
-		viz_combined = np.hstack((image_sp, viz_sep, dec_image))
-		cv2.imshow("Original cutout and reconstructed image", viz_combined)
-		cv2.waitKey(1)
+		while(self.do_classification): pass
 
 		# when mona lisa check is finished and answer stored in self.is_real_monalisa, do:
 		self.currently_executing_job = False
 		self.publish_job_status()
+		print("all done")
+
 
 	def rgb_callback(self, data):
 
 		self.faces = []
 
-		try:
-			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-			self.current_frame = cv_image # save to object so other functions can access it indirectly
-
-			self.get_logger().info(f"Running inference on image...")
-
-			# run inference
-			res = self.model.predict(cv_image, imgsz=(256, 320), show=False, verbose=False, classes=[0], device=self.device)
-
-			# iterate over results
-			for x in res:
-				bbox = x.boxes.xyxy
-				if bbox.nelement() == 0: # skip if empty
-					continue
-
-				self.get_logger().info(f"Person has been detected!")
-
-				bbox = bbox[0]
-
-				# draw rectangle
-				cv_image = cv2.rectangle(cv_image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), self.detection_color, 3)
-
-				cx = int((bbox[0]+bbox[2])/2)
-				cy = int((bbox[1]+bbox[3])/2)
-
-				# draw the center of bounding box
-				cv_image = cv2.circle(cv_image, (cx,cy), 5, self.detection_color, -1)
-
-				self.faces.append((cx,cy))
-
-			#cv2.imshow("image", cv_image)
-			key = cv2.waitKey(1)
-			if key==27:
-				print("exiting")
-				exit()
+		if not self.do_classification:
+			return
+		else:
 			
-		except CvBridgeError as e:
-			print(e)
+
+			try:
+				cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+				# self.current_frame = cv_image # save to object so other functions can access it indirectly
+
+				# get image
+				# cf_image = self.current_frame
+				cf_image = cv_image
+				print(cf_image)
+				cv2.imshow("debug test", cf_image)
+				cv2.waitKey(1)
+
+				# preprocess the image
+				image_cp = color_prepare(cf_image, test=True) # color-prepared
+				image_sp = size_prepare(image_cp, 128) # size-prepared 
+				
+				test_image = np.array([image_sp])
+
+				# model magic
+				enc_image = self.ml_classifier.encoder(test_image).numpy()
+				dec_image = self.ml_classifier.decoder(enc_image).numpy()
+				recon_error = tf.reduce_mean(tf.square(test_image - dec_image))
+				print(f"Reconstruction error from classifier was: {recon_error}")
+
+				# decision
+				if recon_error > self.real_ml_thresh:
+					self.is_real_monalisa = False
+				else:
+					self.is_real_monalisa = True
+
+				print("Decision: Mona Lisa is {}".format("REAL" if self.is_real_monalisa else "FAKE"))
+
+				# lets visualize...
+				# viz_sep = np.zeros((image_sp.shape[0], 10, 3))
+				viz_combined = np.hstack((image_sp, dec_image[0]))
+				# viz_combined = np.hstack((image_sp, viz_sep, dec_image))
+				cv2.imshow("Original cutout and reconstructed image", viz_combined)
+				cv2.waitKey(1)
+
+				self.do_classification = False
+			
+
+			# #self.get_logger().info(f"Running inference on image...")
+
+			# # run inference
+			# res = self.model.predict(cv_image, imgsz=(256, 320), show=False, verbose=False, classes=[0], device=self.device)
+
+			# # iterate over results
+			# for x in res:
+			# 	bbox = x.boxes.xyxy
+			# 	if bbox.nelement() == 0: # skip if empty
+			# 		continue
+
+			# 	# self.get_logger().info(f"Person has been detected!")
+
+			# 	bbox = bbox[0]
+
+			# 	# draw rectangle
+			# 	cv_image = cv2.rectangle(cv_image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), self.detection_color, 3)
+
+			# 	cx = int((bbox[0]+bbox[2])/2)
+			# 	cy = int((bbox[1]+bbox[3])/2)
+
+			# 	# draw the center of bounding box
+			# 	cv_image = cv2.circle(cv_image, (cx,cy), 5, self.detection_color, -1)
+
+			# 	self.faces.append((cx,cy))
+
+			# #cv2.imshow("image", cv_image)
+			# key = cv2.waitKey(1)
+			# if key==27:
+			# 	print("exiting")
+			# 	exit()
+			
+			except CvBridgeError as e:
+				print(e)
 
 
 	def download_image(self, url):
