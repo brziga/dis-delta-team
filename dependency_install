@@ -10,6 +10,7 @@ pip install ultralytics
 pip install pyttsx3
 pip install speechrecognition
 pip install tensorflow
+pip install pyzbar
 
 should be already installed:
 pip install opencv-python 
