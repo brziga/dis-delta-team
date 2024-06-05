@@ -1,4 +1,4 @@
-git:
+git - not obligatory
 git lfs install
 
 sudo:
@@ -13,6 +13,10 @@ pip install tensorflow
 
 should be already installed:
 pip install opencv-python 
+
+if you want to run anomaly detection notebooks, make sure you have
+pip install opencv-contrib-python
+and you dont have opencv-python installed (or you manually fixed which one takes priority)
 
 not necessary for running the implementation (i think):
 pip install scikit-learn
