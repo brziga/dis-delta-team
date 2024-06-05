@@ -494,8 +494,7 @@ class RingDetector(Node):
 
             if np.isinf(pcl_center).any():
                 ring_candidate.hollow = True
-                continue
-
+            else: continue
 
             x_min = int(x_min + 0.1 * x_min)
             y_min = int(y_min + 0.1 * y_min)
